@@ -8,11 +8,11 @@
 //! macOS oracle archive SHA256:
 //! ee70805cb60f18d5ed62548c4e595f6cee0a33407e15358eb1766a46afc1c16e.
 
-use lightcraft_raw::{RawData, RawFormat, decode, probe_info};
+use lightz_raw::{RawData, RawFormat, decode, probe_info};
 use std::path::{Path, PathBuf};
 
 fn corpus() -> PathBuf {
-    std::env::var_os("LIGHTCRAFT_CORPUS").map(PathBuf::from).unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus"))
+    std::env::var_os("LIGHTZ_CORPUS").map(PathBuf::from).unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus"))
 }
 
 fn check(name: &str, hash: u64, sensor: (usize, usize), developed: (usize, usize)) {
@@ -86,12 +86,12 @@ fn canon_r8_craw_sensor_is_exact() {
 }
 
 /// EOS R5 Mark II (raw.pixls.us 7881–7884, CC0). No external decoder was run on these: the hashes pin
-/// LightCraft's own decode. Lossless RAW is CRX 0x100, as in the oracle-checked fixtures above, with
+/// LightZ's own decode. Lossless RAW is CRX 0x100, as in the oracle-checked fixtures above, with
 /// odd-height (2825- and 1787-row) Bayer planes; every entropy stream decodes to its exact end. These
 /// low-ISO C-RAW files need no QP-map escape (most of the camera's files do; that is covered by the unit
 /// tests in `crx.rs`, see docs/cr3.md). The developed images match the camera's own previews.
 fn check_r5m2(name: &str, hash: u64, sensor: (usize, usize), developed: Option<(usize, usize)>) {
-    check_against(name, hash, sensor, developed, "the pinned LightCraft decode");
+    check_against(name, hash, sensor, developed, "the pinned LightZ decode");
 }
 
 #[test]

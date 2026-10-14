@@ -1,12 +1,12 @@
 //! Real library/tool panel moves preserve the selected tool and saved arrangement.
 use egui::{Event, Modifiers, PointerButton, vec2};
 use egui_kittest::{Harness, kittest::Queryable};
-use lightcraft_ui_egui::{LightcraftApp, Services, UiState, docking::Panel, state::RightPanel};
+use lightz_ui_egui::{LightzApp, Services, UiState, docking::Panel, state::RightPanel};
 use serde_json::json;
 use std::time::{Duration, Instant};
 
-fn harness(state: Option<UiState>, width: f32, scale: f32) -> Harness<'static, LightcraftApp> {
-    let mut app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), Services { png: None, ..Default::default() });
+fn harness(state: Option<UiState>, width: f32, scale: f32) -> Harness<'static, LightzApp> {
+    let mut app = LightzApp::new(lightz_engine::Session::with_demo(), Services { png: None, ..Default::default() });
     if let Some(state) = state {
         app.ui = state;
     } else {
@@ -14,7 +14,7 @@ fn harness(state: Option<UiState>, width: f32, scale: f32) -> Harness<'static, L
         app.ui.right = RightPanel::Edit;
     }
     let mut h = Harness::builder().with_size(vec2(width, 900.0)).with_pixels_per_point(scale).build_ui_state(
-        |ui, app: &mut LightcraftApp| {
+        |ui, app: &mut LightzApp| {
             app.logic(&ui.ctx().clone());
             app.ui(ui);
         },
@@ -24,7 +24,7 @@ fn harness(state: Option<UiState>, width: f32, scale: f32) -> Harness<'static, L
     h
 }
 
-fn drag(h: &mut Harness<'_, LightcraftApp>, from: egui::Pos2, to: egui::Pos2) {
+fn drag(h: &mut Harness<'_, LightzApp>, from: egui::Pos2, to: egui::Pos2) {
     h.event(Event::PointerMoved(from));
     h.run_steps(2);
     h.event(Event::PointerButton { pos: from, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE });
@@ -37,7 +37,7 @@ fn drag(h: &mut Harness<'_, LightcraftApp>, from: egui::Pos2, to: egui::Pos2) {
     h.run_steps(4);
 }
 
-fn settle_photo(h: &mut Harness<'_, LightcraftApp>) {
+fn settle_photo(h: &mut Harness<'_, LightzApp>) {
     let started = Instant::now();
     let mut quiet = 0;
     while quiet < 4 {

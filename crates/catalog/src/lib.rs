@@ -1,4 +1,4 @@
-//! The LightCraft library (catalog).
+//! The LightZ library (catalog).
 //!
 //! State changes only through [`Op`]s. [`Catalog::apply`] returns the inverse op, which gives:
 //! - **persistence**: ops are appended to a log (JSON lines) and replayed on load after the last
@@ -33,7 +33,7 @@ pub use dates::{DateRun, GroupBy};
 pub use folders::{FolderNode, FolderRecord};
 pub use journal::{Journal, LoadReport, PersistStats, SnapshotPolicy, SnapshotTiming};
 pub use keywords::KeywordNode;
-use lightcraft_develop::DevelopSettings;
+use lightz_develop::DevelopSettings;
 pub use local::{DEFAULT_FORGET_DAYS, ForgetPlan, folder_of};
 pub use lock::{LibraryLock, LockError, LockOwner};
 pub use model::*;
@@ -59,9 +59,9 @@ pub enum CatalogError {
     Corrupt(String),
     #[error("catalog storage: {0}")]
     Io(String),
-    /// The library was written by a newer LightCraft (a newer catalog format, or a change this
+    /// The library was written by a newer LightZ (a newer catalog format, or a change this
     /// version doesn't know). Nothing was read into the session and nothing was modified.
-    #[error("this library was written by a newer version of LightCraft ({0}); update LightCraft to open it. The library was left unchanged.")]
+    #[error("this library was written by a newer version of LightZ ({0}); update LightZ to open it. The library was left unchanged.")]
     Newer(String),
 }
 
@@ -218,7 +218,7 @@ pub enum Op {
     /// The lens data a photo's file carries (what Reload finds when it was read after import).
     SetEmbeddedLens {
         id: PhotoId,
-        lens: Option<Box<lightcraft_develop::EmbeddedLens>>,
+        lens: Option<Box<lightz_develop::EmbeddedLens>>,
     },
     /// A raw's as-shot white balance (Kelvin, tint) as its file reads now: what a decode or Reload finds when the
     /// camera's colour matrices give the file a Kelvin scale it was imported without (issue #730). Bookkeeping,

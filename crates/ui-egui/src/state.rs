@@ -167,7 +167,7 @@ pub const RECENT_LIBRARIES: usize = 8;
 pub enum AppearanceMode {
     /// Follow the operating system's dark/light setting (dark when it gives no answer).
     Auto,
-    /// The dark theme, whatever the system says (the default: LightCraft's look so far).
+    /// The dark theme, whatever the system says (the default: LightZ's look so far).
     #[default]
     Dark,
     Light,
@@ -248,10 +248,10 @@ pub struct AppSettings {
     pub external_editor: String,
     /// The file Edit in Other Editor hands over.
     pub external_file: EditFile,
-    /// Edit in PhotoCraft: where PhotoCraft is ("" = found where its installer put it; a portable
+    /// Edit in PhotoZ: where PhotoZ is ("" = found where its installer put it; a portable
     /// copy needs its path).
     pub photocraft_path: String,
-    /// The file Edit in PhotoCraft hands over.
+    /// The file Edit in PhotoZ hands over.
     pub photocraft_file: EditFile,
     /// Memory the caches may hold together, in MB (0 = automatic; `app.memoryBudget`).
     pub memory_mb: u32,
@@ -304,9 +304,9 @@ impl Default for AppSettings {
     }
 }
 
-/// The editor name that means PhotoCraft (Photo ▸ Edit In ▸ Edit in PhotoCraft): the host finds
+/// The editor name that means PhotoZ (Photo ▸ Edit In ▸ Edit in PhotoZ): the host finds
 /// where it is installed.
-pub const PHOTOCRAFT: &str = "PhotoCraft";
+pub const PHOTOCRAFT: &str = "PhotoZ";
 
 /// The file format Edit In renders the copy as.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -314,7 +314,7 @@ pub const PHOTOCRAFT: &str = "PhotoCraft";
 pub enum EditFormat {
     #[default]
     Tiff,
-    /// A flat PSD: PhotoCraft saves back to it in place (a TIFF it saves only through Save As).
+    /// A flat PSD: PhotoZ saves back to it in place (a TIFF it saves only through Save As).
     Psd,
 }
 
@@ -422,13 +422,13 @@ impl AppSettings {
     /// source level. A full-size decode would replace the open photo's single full-resolution
     /// source in the cache, and nothing is gained by it.
     pub fn prefetch_edge(&self, wanted_px: f32, native_long_edge: usize, texture_side: usize) -> usize {
-        self.loupe_edge(wanted_px, native_long_edge, texture_side).min(lightcraft_engine::SourceLevel::Preview.max_edge())
+        self.loupe_edge(wanted_px, native_long_edge, texture_side).min(lightz_engine::SourceLevel::Preview.max_edge())
     }
 
     /// Long edge for the hover (preset / profile) and Before renders, which are stand-ins drawn
     /// over the loupe: capped at the preview source level like the old default.
     pub fn stand_in_edge(&self, loupe_edge: usize, texture_side: usize) -> usize {
-        loupe_edge.min(lightcraft_engine::SourceLevel::Preview.max_edge()).min(texture_side.max(MIN_TEXTURE_SIDE))
+        loupe_edge.min(lightz_engine::SourceLevel::Preview.max_edge()).min(texture_side.max(MIN_TEXTURE_SIDE))
     }
 
     /// Long edge of the zoomed frame a window render is cut from, for a photo drawn `drawn_long`
@@ -529,13 +529,13 @@ pub struct UiState {
     pub histogram: bool,
     /// Soft proofing (S in the loupe): render as `proof` would hold the photo.
     pub soft_proof: bool,
-    pub proof: lightcraft_engine::pipeline::Proof,
+    pub proof: lightz_engine::pipeline::Proof,
     /// Soft proofing against a printer / paper ICC profile: (file, name), the intent and Simulate
     /// Paper & Ink. With a profile, `proof.profile` names its table.
     #[serde(skip)]
     pub proof_profile: Option<(String, String)>,
     #[serde(skip)]
-    pub proof_intent: lightcraft_engine::proof::ProofIntent,
+    pub proof_intent: lightz_engine::proof::ProofIntent,
     pub proof_paper_ink: bool,
     /// Masking: show the selected mask as a rendered overlay (O), how (`MaskView` name, ⇧O cycles),
     /// in which colour and opacity (0..100, colour views), and whether pins are drawn.
@@ -655,7 +655,7 @@ pub struct UiState {
     /// Colour grading wheels (shadows, midtones, highlights) hidden for viewing by their eye, and
     /// the photo that applies to: not an edit, and forgotten on moving to another photo or quitting.
     #[serde(skip)]
-    pub grading_hidden: Option<(lightcraft_catalog::PhotoId, [bool; 3])>,
+    pub grading_hidden: Option<(lightz_catalog::PhotoId, [bool; 3])>,
     /// Active on-canvas tool: "", "brush", "linear", "radial", "wbPicker", "straighten", "remove".
     pub tool: String,
     pub brush_size: f32,
@@ -732,7 +732,7 @@ pub struct UiState {
     pub reference: Option<u64>,
     /// Transient toast text, expiry (seconds of app time), and optional colour-label styling.
     #[serde(skip)]
-    pub toast: Option<(String, f64, Option<lightcraft_catalog::ColorLabel>)>,
+    pub toast: Option<(String, f64, Option<lightz_catalog::ColorLabel>)>,
     /// The result of the last Find Missing Photos (it searches in the background).
     #[serde(skip)]
     pub last_find_missing: Option<serde_json::Value>,
@@ -745,7 +745,7 @@ pub struct UiState {
 /// Settings group ids (`SettingsGroup` serde names) a new preset includes by default: everything
 /// but crop, masks, spots and red eye.
 pub fn default_preset_groups() -> Vec<String> {
-    lightcraft_develop::SettingsGroup::default_copy().iter().filter_map(|g| serde_json::to_value(g).ok()?.as_str().map(str::to_string)).collect()
+    lightz_develop::SettingsGroup::default_copy().iter().filter_map(|g| serde_json::to_value(g).ok()?.as_str().map(str::to_string)).collect()
 }
 
 impl Dialog {
@@ -769,7 +769,7 @@ pub struct NameEdit {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Dialog {
     ContactSheet {
-        options: lightcraft_engine::contact_sheet::Options,
+        options: lightz_engine::contact_sheet::Options,
     },
     /// `parent`: the folder to create it in (none: the top level). `include_selected`: the new album
     /// holds the selected photos (Lightroom's "Include selected photos"; folders hold none).
@@ -917,7 +917,7 @@ pub enum Dialog {
     SmartRules {
         id: Option<u64>,
         name: String,
-        rules: lightcraft_catalog::RuleSet,
+        rules: lightz_catalog::RuleSet,
         /// The folder a new smart album is created in (ignored when editing).
         #[serde(default)]
         parent: Option<u64>,
@@ -938,9 +938,9 @@ pub enum Dialog {
     },
     /// `resize` is used unless `full_size`; `limit_kb` 0 = no limit; `dir` empty = default export folder.
     Export {
-        opts: lightcraft_engine::export::ExportOptions,
+        opts: lightz_engine::export::ExportOptions,
         full_size: bool,
-        resize: lightcraft_engine::export::Resize,
+        resize: lightz_engine::export::Resize,
         /// Name typed for "Save as Preset".
         #[serde(default)]
         preset_name: String,
@@ -1053,9 +1053,9 @@ impl Default for UiState {
             show_clipping: false,
             histogram: true,
             soft_proof: false,
-            proof: lightcraft_engine::pipeline::Proof { dest_warning: false, ..Default::default() },
+            proof: lightz_engine::pipeline::Proof { dest_warning: false, ..Default::default() },
             proof_profile: None,
-            proof_intent: lightcraft_engine::proof::ProofIntent::Perceptual,
+            proof_intent: lightz_engine::proof::ProofIntent::Perceptual,
             proof_paper_ink: false,
             mask_overlay: true,
             mask_overlay_mode: "color".into(),
@@ -1148,7 +1148,7 @@ impl Default for UiState {
 
 impl UiState {
     /// Which colour grading wheels (shadows, midtones, highlights) are hidden for viewing `photo`.
-    pub fn grading_hidden_for(&self, photo: lightcraft_catalog::PhotoId) -> [bool; 3] {
+    pub fn grading_hidden_for(&self, photo: lightz_catalog::PhotoId) -> [bool; 3] {
         match self.grading_hidden {
             Some((p, h)) if p == photo => h,
             _ => [false; 3],
@@ -1156,7 +1156,7 @@ impl UiState {
     }
 
     /// Show or hide colour grading wheel `i` (0 shadows, 1 midtones, 2 highlights) on `photo`.
-    pub fn set_grading_hidden(&mut self, photo: lightcraft_catalog::PhotoId, i: usize, hidden: bool) {
+    pub fn set_grading_hidden(&mut self, photo: lightz_catalog::PhotoId, i: usize, hidden: bool) {
         let mut h = self.grading_hidden_for(photo);
         if let Some(slot) = h.get_mut(i) {
             *slot = hidden;

@@ -30,7 +30,7 @@ impl Class {
     }
 }
 
-/// The layering table. Names are package names without the `lightcraft-`
+/// The layering table. Names are package names without the `lightz-`
 /// prefix.
 pub const TABLE: &[(&str, Class)] = &[
     ("geom", Class::Layer(0)),
@@ -63,7 +63,7 @@ pub const TABLE: &[(&str, Class)] = &[
     ("mcp", Class::Layer(5)),
     ("testkit", Class::Testkit),
     // L6 apps and tooling
-    ("lightcraft", Class::Exempt),
+    ("lightz", Class::Exempt),
     ("cli", Class::Exempt),
     ("web", Class::Exempt),
     ("xtask", Class::Exempt),
@@ -99,7 +99,7 @@ pub const UI_CRATES: &[&str] = &["craft-ui", "egui", "eframe", "winit", "egui_ki
 pub const UI_MIN_LAYER: u8 = 5;
 
 pub fn short_name(pkg: &str) -> &str {
-    pkg.strip_prefix("lightcraft-").unwrap_or(pkg)
+    pkg.strip_prefix("lightz-").unwrap_or(pkg)
 }
 
 pub fn classify(pkg: &str) -> Option<Class> {
@@ -157,7 +157,7 @@ impl std::fmt::Display for Violation {
                 write!(f, "{krate}: standalone crate must not depend on workspace crate {dep}")
             }
             Violation::TestkitAsNormalDep { krate } => {
-                write!(f, "{krate}: lightcraft-testkit may only be a dev-dependency")
+                write!(f, "{krate}: lightz-testkit may only be a dev-dependency")
             }
             Violation::UiBelowL5 { krate, dep, layer } => {
                 write!(f, "{krate} (L{layer}) depends on UI crate `{dep}`; UI toolkits are only allowed in L5+")
@@ -265,54 +265,54 @@ mod tests {
     #[test]
     fn clean_downward_graph_passes() {
         let g = [
-            c("lightcraft-geom", &[("serde", Normal, false)]),
-            c("lightcraft-develop", &[("lightcraft-geom", Normal, true)]),
-            c("lightcraft-engine", &[("lightcraft-develop", Normal, true), ("lightcraft-testkit", Dev, true)]),
-            c("lightcraft-ui-egui", &[("lightcraft-engine", Normal, true), ("egui", Normal, false)]),
-            c("lightcraft-cli", &[("lightcraft-ui-egui", Normal, true)]),
+            c("lightz-geom", &[("serde", Normal, false)]),
+            c("lightz-develop", &[("lightz-geom", Normal, true)]),
+            c("lightz-engine", &[("lightz-develop", Normal, true), ("lightz-testkit", Dev, true)]),
+            c("lightz-ui-egui", &[("lightz-engine", Normal, true), ("egui", Normal, false)]),
+            c("lightz-cli", &[("lightz-ui-egui", Normal, true)]),
         ];
         assert!(check(&g).is_empty(), "{:?}", check(&g));
     }
 
     #[test]
     fn upward_dependency_flagged() {
-        let v = check(&[c("lightcraft-develop", &[("lightcraft-engine", Normal, true)])]);
+        let v = check(&[c("lightz-develop", &[("lightz-engine", Normal, true)])]);
         assert!(matches!(v[..], [Violation::Upward { from: 1, to: 4, .. }]));
     }
 
     #[test]
     fn sideways_dependency_flagged() {
-        let v = check(&[c("lightcraft-catalog", &[("lightcraft-preview", Normal, true)])]);
+        let v = check(&[c("lightz-catalog", &[("lightz-preview", Normal, true)])]);
         assert!(matches!(v[..], [Violation::Upward { from: 3, to: 3, .. }]));
     }
 
     #[test]
     fn l0_chain_allowed_one_way() {
-        assert!(check(&[c("lightcraft-raster", &[("lightcraft-color", Normal, true)])]).is_empty());
-        assert!(!check(&[c("lightcraft-color", &[("lightcraft-raster", Normal, true)])]).is_empty());
+        assert!(check(&[c("lightz-raster", &[("lightz-color", Normal, true)])]).is_empty());
+        assert!(!check(&[c("lightz-color", &[("lightz-raster", Normal, true)])]).is_empty());
     }
 
     #[test]
     fn ui_crates_forbidden_below_l5() {
         for dep in ["craft-ui", "egui", "eframe", "winit", "rfd"] {
-            let v = check(&[c("lightcraft-engine", &[(dep, Normal, false)])]);
+            let v = check(&[c("lightz-engine", &[(dep, Normal, false)])]);
             assert!(matches!(v[..], [Violation::UiBelowL5 { .. }]), "{dep}");
         }
-        assert!(check(&[c("lightcraft-mcp", &[("winit", Normal, false)])]).is_empty());
+        assert!(check(&[c("lightz-mcp", &[("winit", Normal, false)])]).is_empty());
     }
 
     #[test]
     fn unregistered_and_testkit_rules() {
-        let v = check(&[c("lightcraft-mystery", &[])]);
-        assert!(matches!(&v[..], [Violation::Unregistered { krate }] if krate == "lightcraft-mystery"));
-        assert!(!check(&[c("lightcraft-pipeline", &[("lightcraft-testkit", Normal, true)])]).is_empty());
-        assert!(check(&[c("lightcraft-pipeline", &[("lightcraft-testkit", Dev, true)])]).is_empty());
+        let v = check(&[c("lightz-mystery", &[])]);
+        assert!(matches!(&v[..], [Violation::Unregistered { krate }] if krate == "lightz-mystery"));
+        assert!(!check(&[c("lightz-pipeline", &[("lightz-testkit", Normal, true)])]).is_empty());
+        assert!(check(&[c("lightz-pipeline", &[("lightz-testkit", Dev, true)])]).is_empty());
     }
 
     #[test]
     fn apps_exempt() {
-        for app in ["lightcraft", "lightcraft-cli", "lightcraft-web", "xtask"] {
-            assert!(check(&[c(app, &[("egui", Normal, false), ("lightcraft-ui-egui", Normal, true)])]).is_empty());
+        for app in ["lightz", "lightz-cli", "lightz-web", "xtask"] {
+            assert!(check(&[c(app, &[("egui", Normal, false), ("lightz-ui-egui", Normal, true)])]).is_empty());
         }
     }
 }

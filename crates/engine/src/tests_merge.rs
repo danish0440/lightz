@@ -21,7 +21,7 @@ fn import(s: &mut Session, paths: Vec<String>) -> Vec<u64> {
 fn hdr_merge_command_creates_and_imports_a_dng() {
     let dir = temp_dir("hdr");
     let mut paths = Vec::new();
-    for (i, b) in lightcraft_merge::synth::bracket_dngs(480, 320, &[-2.0, 0.0, 2.0]).unwrap().into_iter().enumerate() {
+    for (i, b) in lightz_merge::synth::bracket_dngs(480, 320, &[-2.0, 0.0, 2.0]).unwrap().into_iter().enumerate() {
         let p = dir.join(format!("IMG_{i}.dng"));
         std::fs::write(&p, b).unwrap();
         paths.push(p.to_string_lossy().to_string());
@@ -40,10 +40,10 @@ fn hdr_merge_command_creates_and_imports_a_dng() {
     let r = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": true, "stack": true})).unwrap();
     let path = r["path"].as_str().unwrap();
     assert!(path.ends_with("IMG_0-HDR.dng"), "{path}");
-    let id = lightcraft_catalog::PhotoId(r["id"].as_u64().unwrap());
+    let id = lightz_catalog::PhotoId(r["id"].as_u64().unwrap());
     let p = s.catalog.photo(id).unwrap().clone();
     assert_eq!((p.width, p.height), (480, 320));
-    assert_eq!(p.kind, lightcraft_catalog::MediaKind::Raw);
+    assert_eq!(p.kind, lightz_catalog::MediaKind::Raw);
     assert_eq!(s.selection.active, Some(id));
     let d = s.develop_of(id).unwrap();
     assert!(d.light.exposure != 0.0 || d.light.highlights != 0.0, "auto settings applied");
@@ -58,7 +58,7 @@ fn hdr_merge_command_creates_and_imports_a_dng() {
     // the second merge doesn't overwrite the first
     let r2 = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": false})).unwrap();
     assert!(r2["path"].as_str().unwrap().ends_with("IMG_0-HDR-2.dng"));
-    let id2 = lightcraft_catalog::PhotoId(r2["id"].as_u64().unwrap());
+    let id2 = lightz_catalog::PhotoId(r2["id"].as_u64().unwrap());
     assert!(s.catalog.stack_of(id2).is_none(), "no stack without the option");
     // the type filter finds merge results (and only them)
     s.execute("library.filter", &json!({"merged": "hdr"})).unwrap();
@@ -74,19 +74,19 @@ fn a_merge_of_raws_without_colour_matrices_keeps_their_colour() {
     let dir = temp_dir("hdr-colour");
     let neutral = [0.5, 1.0, 0.7];
     let mut paths = Vec::new();
-    for (i, b) in lightcraft_merge::synth::bracket_dngs(240, 160, &[-1.0, 0.0, 1.0]).unwrap().into_iter().enumerate() {
+    for (i, b) in lightz_merge::synth::bracket_dngs(240, 160, &[-1.0, 0.0, 1.0]).unwrap().into_iter().enumerate() {
         // the same pixels with a white balance but no colour matrices
-        let mut raw = lightcraft_raw::decode(&b).unwrap();
-        raw.color = lightcraft_raw::ColorData { as_shot_neutral: Some(neutral), ..Default::default() };
+        let mut raw = lightz_raw::decode(&b).unwrap();
+        raw.color = lightz_raw::ColorData { as_shot_neutral: Some(neutral), ..Default::default() };
         let p = dir.join(format!("IMG_{i}.dng"));
-        std::fs::write(&p, lightcraft_raw::write_dng(&raw, &Default::default()).unwrap()).unwrap();
+        std::fs::write(&p, lightz_raw::write_dng(&raw, &Default::default()).unwrap()).unwrap();
         paths.push(p.to_string_lossy().to_string());
     }
     let mut s = Session::new().with_fs();
     let ids = import(&mut s, paths);
     let r = s.execute("merge.hdr", &json!({"ids": ids, "autoSettings": false})).unwrap();
-    let merged = lightcraft_raw::decode(&std::fs::read(r["path"].as_str().unwrap()).unwrap()).unwrap();
-    assert!(lightcraft_raw::color::has_matrix(&merged.color), "{:?}", merged.color);
+    let merged = lightz_raw::decode(&std::fs::read(r["path"].as_str().unwrap()).unwrap()).unwrap();
+    assert!(lightz_raw::color::has_matrix(&merged.color), "{:?}", merged.color);
     let got = merged.color.as_shot_neutral.expect("the sources' white balance");
     assert!(got.iter().zip(neutral).all(|(a, b)| (a - b).abs() < 1e-3), "{got:?}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -96,9 +96,9 @@ fn a_merge_of_raws_without_colour_matrices_keeps_their_colour() {
 fn panorama_command_with_auto_crop() {
     let dir = temp_dir("pano");
     let mut paths = Vec::new();
-    for (i, v) in lightcraft_merge::synth::pano_views(480, 360, 420.0, &[-25.0, 0.0, 25.0]).unwrap().into_iter().enumerate() {
+    for (i, v) in lightz_merge::synth::pano_views(480, 360, 420.0, &[-25.0, 0.0, 25.0]).unwrap().into_iter().enumerate() {
         let img = v.to_srgb8();
-        let png = lightcraft_codecs::encode_png(&lightcraft_codecs::EncodeImage::rgba8(&img), &lightcraft_codecs::EncodeMeta::default()).unwrap();
+        let png = lightz_codecs::encode_png(&lightz_codecs::EncodeImage::rgba8(&img), &lightz_codecs::EncodeMeta::default()).unwrap();
         let p = dir.join(format!("P_{i}.png"));
         std::fs::write(&p, png).unwrap();
         paths.push(p.to_string_lossy().to_string());
@@ -108,7 +108,7 @@ fn panorama_command_with_auto_crop() {
     let r = s.execute("merge.panorama", &json!({"ids": ids, "projection": "cylindrical", "autoCrop": true, "autoSettings": false})).unwrap();
     assert_eq!(r["projection"], "cylindrical");
     assert_eq!(r["used"].as_array().unwrap().len(), 3);
-    let id = lightcraft_catalog::PhotoId(r["id"].as_u64().unwrap());
+    let id = lightz_catalog::PhotoId(r["id"].as_u64().unwrap());
     let p = s.catalog.photo(id).unwrap().clone();
     assert!(p.width > 800 && p.height > 300, "{}×{}", p.width, p.height);
     let crop = s.develop_of(id).unwrap().crop.geometry.rect;

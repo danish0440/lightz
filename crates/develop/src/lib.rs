@@ -1,4 +1,4 @@
-//! The non-destructive edit model of LightCraft.
+//! The non-destructive edit model of LightZ.
 //!
 //! [`DevelopSettings`] is the complete description of a photo's look: pure, serializable data.
 //! The pipeline evaluates it; the catalog stores it; presets, copy/paste, sync, versions and history
@@ -161,7 +161,7 @@ mod tests {
                 op: MaskOp::Add,
                 invert: false,
                 shape: MaskShape::Radial {
-                    center: lightcraft_geom::Point::new(0.5, 0.5),
+                    center: lightz_geom::Point::new(0.5, 0.5),
                     rx: 0.2,
                     ry: 0.1,
                     angle: 10.0,

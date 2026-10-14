@@ -9,8 +9,8 @@ use std::sync::{
 };
 
 use crate::lightroom_sqlite::{Database, LiveTable, Value as SqlValue};
-use lightcraft_catalog::{Album, Flag, Op, Photo, PhotoId, Source};
-use lightcraft_geom::{Affine, Orientation, Point, Rect};
+use lightz_catalog::{Album, Flag, Op, Photo, PhotoId, Source};
+use lightz_geom::{Affine, Orientation, Point, Rect};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -563,10 +563,10 @@ fn lightroom_orientation(code: &str) -> Option<Orientation> {
     ALL.into_iter().find(|&o| code.chars().eq([corner(o, 0.0, 0.0), corner(o, 1.0, 0.0)]))
 }
 
-/// Lightroom's crop in LightCraft's frame. `crs` gives the crop's top-left (`CropLeft`, `CropTop`)
+/// Lightroom's crop in LightZ's frame. `crs` gives the crop's top-left (`CropLeft`, `CropTop`)
 /// and bottom-right (`CropRight`, `CropBottom`) corners on the stored image (before orientation and
 /// straightening), normalized to its size, plus a straighten angle that turns the other way to
-/// LightCraft's. LightCraft's crop is a rectangle in the oriented image rotated by `angle` about its
+/// LightZ's. LightZ's crop is a rectangle in the oriented image rotated by `angle` about its
 /// centre, normalized to the oriented image's size, so the corners go through the orientation and
 /// then the rotation; `stored_aspect` (width / height of the stored image) matters once the
 /// rectangle turns. On a real catalog this reproduced the frame aspect of all 223 straightened crops
@@ -671,7 +671,7 @@ fn apply(s: &mut crate::Session, data: CatalogImport, update_existing: bool) -> 
     if let Some(path) = index_path {
         s.persist()?;
         let bytes = serde_json::to_vec(&applied.index).map_err(|e| error(e.to_string()))?;
-        lightcraft_catalog::safe_file::write_atomic(&path, &bytes).map_err(|e| error(e.to_string()))?;
+        lightz_catalog::safe_file::write_atomic(&path, &bytes).map_err(|e| error(e.to_string()))?;
     }
     Ok(applied.report)
 }
@@ -749,7 +749,7 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
                 &now,
             );
             if ["RAW", "DNG", "ARW", "CR2", "CR3", "NEF", "NRW", "RAF", "ORF", "RW2", "PEF"].contains(&p.format.to_uppercase().as_str()) {
-                p.kind = lightcraft_catalog::MediaKind::Raw;
+                p.kind = lightz_catalog::MediaKind::Raw;
             }
             p
         };
@@ -795,7 +795,7 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
                 stored_aspect,
             ) {
                 Ok((partial, unknown)) => {
-                    p.develop = Arc::new(lightcraft_develop::apply_partial(&p.develop, &partial, 1.0));
+                    p.develop = Arc::new(lightz_develop::apply_partial(&p.develop, &partial, 1.0));
                     p.edited = Some(now.clone());
                     if !unknown.is_empty() {
                         unmapped.insert(src.source_id, unknown);
@@ -832,7 +832,7 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
             .collections
             .get(&collection_key)
             .copied()
-            .map(lightcraft_catalog::AlbumId)
+            .map(lightz_catalog::AlbumId)
             .filter(|id| s.catalog.album(*id).is_some())
             .unwrap_or_else(|| s.catalog.alloc_album_id());
         index.collections.insert(collection_key, id.0);
@@ -901,7 +901,7 @@ pub(crate) fn apply_prepared(s: &mut crate::Session, data: CatalogImport, contex
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lightcraft_geom::CropGeometry;
+    use lightz_geom::CropGeometry;
     fn row(v: Value) -> Row {
         serde_json::from_value(v).unwrap()
     }
@@ -971,7 +971,7 @@ mod tests {
         let data = sample();
         apply(&mut s, data.clone(), false).unwrap();
         let id = s.catalog.photos().find(|p| p.copy_of.is_none()).unwrap().id;
-        s.set_develop(id, lightcraft_develop::DevelopSettings::default(), "Personal edit").unwrap();
+        s.set_develop(id, lightz_develop::DevelopSettings::default(), "Personal edit").unwrap();
         let r = apply(&mut s, data.clone(), false).unwrap();
         assert!(r["preservedExistingEdits"].as_u64().unwrap() > 0);
         assert_eq!(s.catalog.photo(id).unwrap().develop.light.exposure, 0.0);
@@ -1040,7 +1040,7 @@ mod tests {
         assert_eq!(crop["rect"]["y1"], 1.0);
         assert_eq!(crop["angle"], 0.0);
         assert!(!unknown.iter().any(|k| k.starts_with("CropLeft")), "{unknown:?}");
-        // an angle alone still means a crop (Lightroom's angle turns the other way to LightCraft's)
+        // an angle alone still means a crop (Lightroom's angle turns the other way to LightZ's)
         let (partial, unknown) = mapped_settings("s = { CropAngle = -1.5 }", crate::crs::Target::RawAbsolute, 1.5, Orientation::Normal, 1.5).unwrap();
         assert_eq!(partial["crop"]["geometry"]["angle"], 1.5);
         assert!(!unknown.iter().any(|k| k.starts_with("CropAngle")), "{unknown:?}");
@@ -1092,7 +1092,7 @@ mod tests {
         assert!(partial.get("crop").is_none());
     }
 
-    /// The `crs` corners and angle Lightroom would store for LightCraft crop `g` on a stored image
+    /// The `crs` corners and angle Lightroom would store for LightZ crop `g` on a stored image
     /// of aspect `w` (height 1) shown with orientation `o`.
     fn lightroom_crop(g: CropGeometry, o: Orientation, w: f64) -> String {
         let (ow, oh) = if o.swaps_axes() { (1.0, w) } else { (w, 1.0) };
@@ -1229,7 +1229,7 @@ mod tests {
 
     #[test]
     fn persistent_reimport_keeps_copy_and_collection_ids_and_capture_time() {
-        let dir = std::env::temp_dir().join(format!("lightcraft-lrcat-reimport-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("lightz-lrcat-reimport-{}", std::process::id()));
         let mut s = crate::Session::new();
         s.open_library(&dir, false).unwrap();
         let mut data = sample();
@@ -1347,7 +1347,7 @@ mod tests {
     #[test]
     fn reads_native_sqlite_tables_without_lightroom_or_external_processes() {
         let bytes = native_catalog(&photo_tables(("/catalog/", "")));
-        let path = std::env::temp_dir().join(format!("lightcraft-native-catalog-{}.lrcat", std::process::id()));
+        let path = std::env::temp_dir().join(format!("lightz-native-catalog-{}.lrcat", std::process::id()));
         std::fs::write(&path, &bytes).unwrap();
         let catalog = read(&path).unwrap();
         assert_eq!(catalog.photos.len(), 1);
@@ -1361,7 +1361,7 @@ mod tests {
 
     #[test]
     fn a_root_missing_here_is_found_relative_to_the_catalog() {
-        let dir = std::env::temp_dir().join(format!("lightcraft-relocated-catalog-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("lightz-relocated-catalog-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("Lightroom")).unwrap();
         std::fs::create_dir_all(dir.join("RAW")).unwrap();

@@ -1,6 +1,6 @@
-# lightcraft-tiff (L0)
+# lightz-tiff (L0)
 
-TIFF / IFD reader and writer. Used by `lightcraft-raw` (DNG, CR2, NEF, ARW…), `lightcraft-meta` (Exif) and
+TIFF / IFD reader and writer. Used by `lightz-raw` (DNG, CR2, NEF, ARW…), `lightz-meta` (Exif) and
 later the TIFF/DNG exporters.
 
 ## Features

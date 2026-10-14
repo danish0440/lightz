@@ -16,12 +16,12 @@
 
 use std::collections::HashMap;
 
-use lightcraft_catalog::PhotoId;
-use lightcraft_engine::Session;
-use lightcraft_engine::media::{QuickJob, QuickSource, RenderJob, RenderResult};
-use lightcraft_engine::pipeline::StageCache;
-use lightcraft_preview::JobPool;
-use lightcraft_raster::Histogram;
+use lightz_catalog::PhotoId;
+use lightz_engine::Session;
+use lightz_engine::media::{QuickJob, QuickSource, RenderJob, RenderResult};
+use lightz_engine::pipeline::StageCache;
+use lightz_preview::JobPool;
+use lightz_raster::Histogram;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -93,7 +93,7 @@ struct Queued {
 /// The texture of a render: its pixels as egui wants them. Renders are opaque, so the common case
 /// is a plain copy; only a pixel with alpha pays for premultiplying. (The generic conversion, on
 /// the UI thread, was most of the time a 5 MP zoom window took to show.)
-pub(crate) fn color_image(img: &lightcraft_raster::Rgba8) -> egui::ColorImage {
+pub(crate) fn color_image(img: &lightz_raster::Rgba8) -> egui::ColorImage {
     let pixels = img
         .data
         .iter()
@@ -176,12 +176,12 @@ pub struct Renderer {
     shown_ids: HashMap<Slot, u64>,
     /// Requests made before this id belong to a library or preview cache that is gone.
     epoch: u64,
-    preview_generation: Option<(std::sync::Weak<lightcraft_preview::PreviewCache>, u64)>,
+    preview_generation: Option<(std::sync::Weak<lightz_preview::PreviewCache>, u64)>,
     /// Last thumbnail inputs; weak identities do not retain photo histories or force deep clones.
     /// (photo, size bucket, job key, whether the request went through an embedded stand-in)
-    thumb_inputs: HashMap<PhotoId, (std::sync::Weak<lightcraft_catalog::Photo>, usize, u64, bool)>,
+    thumb_inputs: HashMap<PhotoId, (std::sync::Weak<lightz_catalog::Photo>, usize, u64, bool)>,
     /// Photos whose grid thumbnail is the camera's embedded preview itself (no render behind it).
-    embedded_thumbs: HashMap<PhotoId, (std::sync::Weak<lightcraft_catalog::Photo>, usize, u64)>,
+    embedded_thumbs: HashMap<PhotoId, (std::sync::Weak<lightz_catalog::Photo>, usize, u64)>,
     pool: JobPool<Slot, RenderResult>,
     /// Jobs run elsewhere (see [`RenderOffload`]); `queue` holds the ones not started yet.
     offload: Option<Box<dyn RenderOffload>>,
@@ -223,7 +223,7 @@ pub struct Renderer {
     #[cfg(test)]
     pub(crate) stage_budget_override: Option<usize>,
     /// The monitor profile textures are made for (`app.displayProfile`; `None`: sRGB).
-    display: Option<Arc<lightcraft_engine::display::Display>>,
+    display: Option<Arc<lightz_engine::display::Display>>,
     /// Since when nothing has been pending, and whether the GPU pool was trimmed since.
     #[cfg(not(target_arch = "wasm32"))]
     idle: Option<(std::time::Instant, bool)>,
@@ -292,7 +292,7 @@ impl Renderer {
 
 impl Renderer {
     /// Would asking for this thumbnail again (at `priority`) change nothing?
-    pub fn thumb_current(&self, photo: &Arc<lightcraft_catalog::Photo>, bucket: usize, priority: u32) -> bool {
+    pub fn thumb_current(&self, photo: &Arc<lightz_catalog::Photo>, bucket: usize, priority: u32) -> bool {
         let Some(&(ref old, size, key, quick)) = self.thumb_inputs.get(&photo.id) else { return false };
         if old.as_ptr() != Arc::as_ptr(photo) || size != bucket {
             return false;
@@ -312,14 +312,14 @@ impl Renderer {
     /// (so `Slot::ThumbQuick` holds the picture) and no edit has moved the photo on to a settings
     /// hash of its own. The grid stops here instead of decoding the raw behind a thumbnail the
     /// embedded JPEG already covers — see `grid::skips_the_real_render`.
-    pub fn thumb_quick_is_final(&self, photo: &Arc<lightcraft_catalog::Photo>, bucket: usize, priority: u32) -> bool {
+    pub fn thumb_quick_is_final(&self, photo: &Arc<lightz_catalog::Photo>, bucket: usize, priority: u32) -> bool {
         let Some((old, size, key)) = self.embedded_thumbs.get(&photo.id) else { return false };
         old.as_ptr() == Arc::as_ptr(photo) && *size == bucket && !self.request_needed(Slot::ThumbQuick(photo.id), *key, priority)
     }
 
     /// Whether this photo's embedded-preview thumbnail is being fetched right now: the grid has
     /// asked, and neither the picture nor a render behind it is owed.
-    pub fn thumb_quick_pending(&self, photo: &Arc<lightcraft_catalog::Photo>, bucket: usize) -> bool {
+    pub fn thumb_quick_pending(&self, photo: &Arc<lightz_catalog::Photo>, bucket: usize) -> bool {
         let Some((old, size, _, quick)) = self.thumb_inputs.get(&photo.id) else { return false };
         old.as_ptr() == Arc::as_ptr(photo) && *size == bucket && *quick && self.pending.contains_key(&Slot::ThumbQuick(photo.id))
     }
@@ -327,12 +327,12 @@ impl Renderer {
     /// Remember that the camera's embedded preview is this photo's final thumbnail, so the grid's
     /// per-frame requests stop at it (the quick render's key, which [`Self::thumb_quick_is_final`]
     /// compares against).
-    pub fn remember_embedded_thumb(&mut self, photo: &Arc<lightcraft_catalog::Photo>, bucket: usize, key: u64) {
+    pub fn remember_embedded_thumb(&mut self, photo: &Arc<lightz_catalog::Photo>, bucket: usize, key: u64) {
         self.remember_thumb(photo, bucket, key, true);
         self.embedded_thumbs.insert(photo.id, (Arc::downgrade(photo), bucket, key));
     }
 
-    pub fn remember_thumb(&mut self, photo: &Arc<lightcraft_catalog::Photo>, bucket: usize, key: u64, quick: bool) {
+    pub fn remember_thumb(&mut self, photo: &Arc<lightz_catalog::Photo>, bucket: usize, key: u64, quick: bool) {
         if self.thumb_inputs.len() >= 1024 && !self.thumb_inputs.contains_key(&photo.id) {
             self.thumb_inputs.retain(|_, (p, _, _, _)| p.strong_count() > 0);
             if self.thumb_inputs.len() >= 1024
@@ -345,7 +345,7 @@ impl Renderer {
     }
 
     /// Views that render straight into the display profile's primaries (wide gamut); everything
-    /// else is rendered for sRGB and converted ([`lightcraft_engine::display::present`]).
+    /// else is rendered for sRGB and converted ([`lightz_engine::display::present`]).
     fn renders_for_display(slot: Slot) -> bool {
         matches!(
             slot,
@@ -365,13 +365,13 @@ impl Renderer {
     }
 
     /// The display profile textures are made for (`None`: sRGB).
-    pub fn display(&self) -> Option<&Arc<lightcraft_engine::display::Display>> {
+    pub fn display(&self) -> Option<&Arc<lightz_engine::display::Display>> {
         self.display.as_ref()
     }
 
     /// Show previews through `display` from now on (`app.displayProfile`): when it changes, every
     /// texture is made again for the new one.
-    pub fn set_display(&mut self, display: Option<Arc<lightcraft_engine::display::Display>>) {
+    pub fn set_display(&mut self, display: Option<Arc<lightz_engine::display::Display>>) {
         if display.as_ref().map(|d| d.id()) != self.display_id() {
             self.forget_all();
         }
@@ -379,10 +379,10 @@ impl Renderer {
     }
 
     /// Run `job` and make its image ready for `display` (on the worker thread).
-    fn run_for(job: impl FnOnce() -> RenderResult, display: &Option<Arc<lightcraft_engine::display::Display>>) -> RenderResult {
+    fn run_for(job: impl FnOnce() -> RenderResult, display: &Option<Arc<lightz_engine::display::Display>>) -> RenderResult {
         let mut r = job();
         if let Some(d) = display {
-            lightcraft_engine::display::present(&mut r, d);
+            lightz_engine::display::present(&mut r, d);
         }
         r
     }
@@ -429,7 +429,7 @@ impl Renderer {
             return;
         }
         self.pending.insert(slot, (job.key, priority));
-        job.request_id = lightcraft_preview::next_tick();
+        job.request_id = lightz_preview::next_tick();
         self.request_ids.insert(slot, job.request_id);
         // (an offload keeps its own per-view stage caches; the flag tells it to)
         let job = if slot.is_view() { job.with_stages(self.stages.entry(slot).or_default().clone()) } else { job };
@@ -448,7 +448,7 @@ impl Renderer {
             key,
             priority,
             Box::new(move || {
-                let run = || if background { lightcraft_engine::memory::in_background(|| job.run()) } else { job.run() };
+                let run = || if background { lightz_engine::memory::in_background(|| job.run()) } else { job.run() };
                 Self::run_for(run, &display)
             }),
         );
@@ -461,7 +461,7 @@ impl Renderer {
         }
         self.quick_tried.insert(slot, job.key);
         self.pending.insert(slot, (job.key, priority));
-        job.request_id = lightcraft_preview::next_tick();
+        job.request_id = lightz_preview::next_tick();
         self.request_ids.insert(slot, job.request_id);
         let key = job.key;
         let display = self.display.clone();
@@ -476,10 +476,10 @@ impl Renderer {
         }
         self.prefetched.insert(slot, job.key);
         self.pending.insert(slot, (job.key, priority));
-        job.request_id = lightcraft_preview::next_tick();
+        job.request_id = lightz_preview::next_tick();
         self.request_ids.insert(slot, job.request_id);
         let key = job.key;
-        self.pool.submit(slot, key, priority, Box::new(move || lightcraft_engine::memory::in_background(|| job.run())));
+        self.pool.submit(slot, key, priority, Box::new(move || lightz_engine::memory::in_background(|| job.run())));
     }
 
     /// Is a request for `slot` queued or running?
@@ -487,7 +487,7 @@ impl Renderer {
     pub fn forget_all(&mut self) {
         self.request_ids.clear();
         self.shown_ids.clear();
-        self.epoch = lightcraft_preview::next_tick();
+        self.epoch = lightz_preview::next_tick();
         self.preview_generation = None;
         self.pool.reprioritize(|_, _| None);
         self.thumb_inputs.clear();
@@ -737,7 +737,7 @@ impl Renderer {
             }
             // (results from an offload, which doesn't know the display profile: converted here)
             if let Some(d) = &self.display {
-                lightcraft_engine::display::present(&mut r, d);
+                lightz_engine::display::present(&mut r, d);
             }
             if self.pending.get(&slot).is_some_and(|p| p.0 == r.key) {
                 self.pending.remove(&slot);
@@ -834,8 +834,8 @@ impl Renderer {
         }
         let waited = now.duration_since(since);
         if waited >= IDLE_TRIM {
-            lightcraft_engine::gpu::trim_pool(0);
-            lightcraft_engine::memory::release();
+            lightz_engine::gpu::trim_pool(0);
+            lightz_engine::memory::release();
             self.idle = Some((since, true));
         } else {
             ctx.request_repaint_after(IDLE_TRIM - waited);
@@ -848,12 +848,12 @@ impl Renderer {
         if let Some(b) = self.stage_budget_override {
             return b;
         }
-        lightcraft_engine::memory::budget() / STAGE_BUDGET_SHARE
+        lightz_engine::memory::budget() / STAGE_BUDGET_SHARE
     }
 
     /// Clear stage caches, least useful first, until what they hold fits [`Self::stage_budget`].
     fn trim_stages(&mut self) {
-        let sizes: Vec<(Slot, usize)> = self.stages.iter().map(|(slot, c)| (*slot, c.bytes() + lightcraft_engine::gpu::stage_bytes(c))).collect();
+        let sizes: Vec<(Slot, usize)> = self.stages.iter().map(|(slot, c)| (*slot, c.bytes() + lightz_engine::gpu::stage_bytes(c))).collect();
         for slot in stage_trim_order(&sizes, self.stage_budget()) {
             if let Some(c) = self.stages.get(&slot) {
                 c.clear();
@@ -865,11 +865,11 @@ impl Renderer {
     /// What the renderer holds: per-view stage caches (CPU images and GPU buffers) and textures.
     pub fn memory(&self) -> serde_json::Value {
         let cpu: usize = self.stages.values().map(|s| s.bytes()).sum();
-        let gpu: usize = self.stages.values().map(|s| lightcraft_engine::gpu::stage_bytes(s)).sum();
+        let gpu: usize = self.stages.values().map(|s| lightz_engine::gpu::stage_bytes(s)).sum();
         let tex: usize = self.textures.values().map(|t| t.size[0] * t.size[1] * 4).sum();
         let copies: usize = self.textures.values().filter_map(|t| t.pixels.as_ref()).map(|p| p.pixels.len() * 4).sum();
         serde_json::json!({
-            "stageCaches": {"count": self.stages.len(), "cpuBytes": cpu, "gpuBytes": gpu, "budgetBytes": self.stage_budget(), "trimmed": self.stages_trimmed, "sharedSourceBytes": lightcraft_engine::gpu::shared_source_bytes()},
+            "stageCaches": {"count": self.stages.len(), "cpuBytes": cpu, "gpuBytes": gpu, "budgetBytes": self.stage_budget(), "trimmed": self.stages_trimmed, "sharedSourceBytes": lightz_engine::gpu::shared_source_bytes()},
             "textures": {"count": self.textures.len(), "bytes": tex, "cpuCopyBytes": copies},
         })
     }
@@ -924,7 +924,7 @@ impl Renderer {
 #[cfg(test)]
 mod thumbnail_tests {
     use super::*;
-    use lightcraft_catalog::{Catalog, Op, Photo, Source};
+    use lightz_catalog::{Catalog, Op, Photo, Source};
 
     struct Blocked;
     impl RenderOffload for Blocked {
@@ -948,7 +948,7 @@ mod thumbnail_tests {
         r.pending.insert(Slot::Thumb(PhotoId(1)), (77, 10));
         assert!(r.thumb_current(&old, 384, 10));
         assert!(!r.thumb_current(&old, 512, 10));
-        let mut settings = lightcraft_develop::DevelopSettings::default();
+        let mut settings = lightz_develop::DevelopSettings::default();
         settings.light.exposure = 1.0;
         let undo = catalog.apply(Op::SetDevelop { id: PhotoId(1), settings: Arc::new(settings), label: "edit".into(), edited: None }).unwrap();
         assert!(!r.thumb_current(catalog.photo(PhotoId(1)).unwrap(), 384, 10));
@@ -1011,7 +1011,7 @@ mod thumbnail_tests {
     #[test]
     fn a_fast_draft_is_drawn_in_the_frame_that_asked_for_it() {
         let mut s = Session::new();
-        s.media.file_loader = Some(Arc::new(|_, _| Ok((lightcraft_raster::Rgb32f::new(8, 8), Default::default()))));
+        s.media.file_loader = Some(Arc::new(|_, _| Ok((lightz_raster::Rgb32f::new(8, 8), Default::default()))));
         s.catalog.apply(Op::AddPhoto { photo: Box::new((*photo()).clone()) }).unwrap();
         let mut r = Renderer::with_worker_threads(1);
         let ctx = egui::Context::default();
@@ -1045,17 +1045,17 @@ mod thumbnail_tests {
             std::mem::take(&mut self.0.borrow_mut().finished)
         }
     }
-    fn fixture() -> (crate::LightcraftApp, std::rc::Rc<std::cell::RefCell<Work>>, egui::Context) {
+    fn fixture() -> (crate::LightzApp, std::rc::Rc<std::cell::RefCell<Work>>, egui::Context) {
         fixture_with(Session::new(), (*photo()).clone())
     }
-    fn fixture_with(mut s: Session, photo: Photo) -> (crate::LightcraftApp, std::rc::Rc<std::cell::RefCell<Work>>, egui::Context) {
+    fn fixture_with(mut s: Session, photo: Photo) -> (crate::LightzApp, std::rc::Rc<std::cell::RefCell<Work>>, egui::Context) {
         s.media.file_loader = Some(Arc::new(|_, _| {
-            let mut image = lightcraft_raster::Rgb32f::new(8, 8);
+            let mut image = lightz_raster::Rgb32f::new(8, 8);
             image.data.fill([0.3, 0.2, 0.1]);
             Ok((image, Default::default()))
         }));
         s.catalog.apply(Op::AddPhoto { photo: Box::new(photo) }).unwrap();
-        let mut app = crate::LightcraftApp::new(s, crate::Services::default());
+        let mut app = crate::LightzApp::new(s, crate::Services::default());
         app.renderer.keep_pixels = true;
         let work = std::rc::Rc::new(std::cell::RefCell::new(Work::default()));
         app.renderer.set_offload(Box::new(Manual(work.clone())));
@@ -1066,11 +1066,11 @@ mod thumbnail_tests {
     fn take_job(work: &std::rc::Rc<std::cell::RefCell<Work>>) -> (Slot, RenderJob) {
         work.borrow_mut().jobs.pop().unwrap()
     }
-    fn finish(app: &mut crate::LightcraftApp, work: &std::rc::Rc<std::cell::RefCell<Work>>, ctx: &egui::Context, slot: Slot, result: RenderResult) {
+    fn finish(app: &mut crate::LightzApp, work: &std::rc::Rc<std::cell::RefCell<Work>>, ctx: &egui::Context, slot: Slot, result: RenderResult) {
         work.borrow_mut().finished.push((slot, result, 0.0));
         app.renderer.poll(ctx, &mut app.session);
     }
-    fn request(app: &mut crate::LightcraftApp) {
+    fn request(app: &mut crate::LightzApp) {
         crate::panels::grid::request_thumb(app, PhotoId(1), 256, 10);
     }
 
@@ -1163,7 +1163,7 @@ mod thumbnail_tests {
         app.session.media.file_loader = Some(Arc::new(|_, _| panic!("decoder bug")));
         app.renderer.offload = None; // the real job pool
         let slot = Slot::Thumb(PhotoId(1));
-        let ask = |app: &mut crate::LightcraftApp| {
+        let ask = |app: &mut crate::LightzApp| {
             if let Some(job) = app.session.thumb_job(PhotoId(1), 256) {
                 app.renderer.request(slot, job, 30);
             }
@@ -1198,10 +1198,10 @@ mod thumbnail_tests {
         let g = gate.clone();
         s.media.preview_loader = Some(Arc::new(move |_: &str, _| {
             drop(g.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
-            Some(lightcraft_raster::Rgba8 { width: 4, height: 4, data: vec![[200, 100, 50, 255]; 16] })
+            Some(lightz_raster::Rgba8 { width: 4, height: 4, data: vec![[200, 100, 50, 255]; 16] })
         }));
         let mut raw = (*photo()).clone();
-        raw.kind = lightcraft_catalog::MediaKind::Raw;
+        raw.kind = lightz_catalog::MediaKind::Raw;
         raw.develop = Arc::new(raw.camera_defaults());
         let (mut app, _, ctx) = fixture_with(s, raw);
         app.renderer.set_offload(Box::new(Blocked));
@@ -1230,7 +1230,7 @@ mod thumbnail_tests {
 
         // an edit takes the embedded preview out of the picture: the real thumbnail is rendered then
         let mut edited = (*photo()).clone();
-        edited.kind = lightcraft_catalog::MediaKind::Raw;
+        edited.kind = lightz_catalog::MediaKind::Raw;
         edited.develop = Arc::new({
             let mut d = edited.camera_defaults();
             d.light.exposure = 0.5;
@@ -1269,7 +1269,7 @@ mod thumbnail_tests {
         let (mut app, work, ctx) = fixture();
         let mut jobs = Vec::new();
         for exposure in [0.0, 1.0, 2.0] {
-            let mut edit = lightcraft_develop::DevelopSettings::default();
+            let mut edit = lightz_develop::DevelopSettings::default();
             edit.light.exposure = exposure;
             app.session.catalog.apply(Op::SetDevelop { id: PhotoId(1), settings: Arc::new(edit), label: "drag".into(), edited: None }).unwrap();
             let job = app.session.loupe_job(PhotoId(1), 8, 8, true).unwrap().draft();
@@ -1296,7 +1296,7 @@ mod thumbnail_tests {
         let (mut app, work, ctx) = fixture();
         let mut jobs = Vec::new();
         for exposure in [1.0, 2.0] {
-            let mut edit = lightcraft_develop::DevelopSettings::default();
+            let mut edit = lightz_develop::DevelopSettings::default();
             edit.hdr.enabled = true;
             edit.light.exposure = exposure;
             app.session.catalog.apply(Op::SetDevelop { id: PhotoId(1), settings: Arc::new(edit), label: "drag".into(), edited: None }).unwrap();
@@ -1326,10 +1326,10 @@ mod thumbnail_tests {
         let old_result = old.run();
         app.renderer.forget_all();
         let photo = app.session.catalog.photo(PhotoId(1)).unwrap().as_ref().clone();
-        app.session = lightcraft_engine::Session::new();
+        app.session = lightz_engine::Session::new();
         app.session.catalog.apply(Op::AddPhoto { photo: Box::new(photo) }).unwrap();
         app.session.media.file_loader = Some(Arc::new(|_, _| {
-            let mut image = lightcraft_raster::Rgb32f::new(8, 8);
+            let mut image = lightz_raster::Rgb32f::new(8, 8);
             image.data.fill([0.1, 0.2, 0.9]);
             Ok((image, Default::default()))
         }));
@@ -1353,7 +1353,7 @@ mod thumbnail_tests {
             let (mut app, work, ctx) = fixture();
             request(&mut app);
             let (slot, old) = take_job(&work);
-            let mut edit = lightcraft_develop::DevelopSettings::default();
+            let mut edit = lightz_develop::DevelopSettings::default();
             edit.light.exposure = 1.0;
             app.session.catalog.apply(Op::SetDevelop { id: PhotoId(1), settings: Arc::new(edit), label: "edit".into(), edited: None }).unwrap();
             request(&mut app);
@@ -1389,7 +1389,7 @@ mod thumbnail_tests {
         let key = first.key;
         finish(&mut app, &work, &ctx, slot, first.run());
         let original = app.renderer.thumb(PhotoId(1)).unwrap().pixels.clone().unwrap();
-        let mut edit = lightcraft_develop::DevelopSettings::default();
+        let mut edit = lightz_develop::DevelopSettings::default();
         edit.light.exposure = 1.0;
         let undo =
             app.session.catalog.apply(Op::SetDevelop { id: PhotoId(1), settings: Arc::new(edit), label: "edit".into(), edited: None }).unwrap();
@@ -1419,8 +1419,8 @@ mod thumbnail_tests {
         assert_eq!(app.renderer.thumb(PhotoId(1)).unwrap().pixels.as_ref().unwrap().pixels[0].to_array(), [255, 0, 255, 255]);
         // An old job can have the SAME render key and stale decoded pixels.
         let mut old = job.clone();
-        old.source = lightcraft_engine::media::SourceRef::Loaded(Box::new(lightcraft_engine::media::DecodedSource::new(
-            Arc::new(lightcraft_raster::Rgb32f::new(8, 8)),
+        old.source = lightz_engine::media::SourceRef::Loaded(Box::new(lightz_engine::media::DecodedSource::new(
+            Arc::new(lightz_raster::Rgb32f::new(8, 8)),
             None,
         )));
         app.renderer.textures.clear();
@@ -1514,12 +1514,12 @@ mod stage_budget_tests {
     // Given real stage caches over the budget, the renderer clears them (the open photo's last)
     #[test]
     fn the_renderer_trims_real_stage_caches() {
-        use lightcraft_engine::pipeline::{RenderRequest, SourceInfo, render_cached};
-        let src = std::sync::Arc::new(lightcraft_raster::Rgb32f::from_fn(320, 240, |x, y| [x as f32 / 320.0, y as f32 / 240.0, 0.3]));
+        use lightz_engine::pipeline::{RenderRequest, SourceInfo, render_cached};
+        let src = std::sync::Arc::new(lightz_raster::Rgb32f::from_fn(320, 240, |x, y| [x as f32 / 320.0, y as f32 / 240.0, 0.3]));
         let mut r = Renderer::default();
         for slot in [Slot::Main, Slot::Hover] {
             let cache: Arc<StageCache> = Default::default();
-            let mut s = lightcraft_engine::develop::DevelopSettings::default();
+            let mut s = lightz_engine::develop::DevelopSettings::default();
             s.effects.clarity = 50.0;
             render_cached(&src, &SourceInfo::default(), &s, &RenderRequest::fit(320, 240), &cache);
             assert!(cache.bytes() > 0);
@@ -1556,7 +1556,7 @@ mod color_image_tests {
     // The texture a render becomes is what egui would make of its bytes, whatever the alpha
     #[test]
     fn the_fast_conversion_equals_eguis() {
-        let img = lightcraft_raster::Rgba8::from_fn(37, 29, |x, y| {
+        let img = lightz_raster::Rgba8::from_fn(37, 29, |x, y| {
             let a = match (x + y) % 5 {
                 0 => 0,
                 1 => 17,
@@ -1573,7 +1573,7 @@ mod color_image_tests {
 
     #[test]
     fn an_empty_image_is_an_empty_texture() {
-        let img = lightcraft_raster::Rgba8::new(0, 0);
+        let img = lightz_raster::Rgba8::new(0, 0);
         assert!(color_image(&img).pixels.is_empty());
     }
 }

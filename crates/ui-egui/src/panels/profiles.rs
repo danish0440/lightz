@@ -3,9 +3,9 @@
 //! star, the applied profile's amount, a temporary loupe preview while hovering and apply on click.
 
 use egui::{Align2, Color32, Rect, Sense, Stroke, pos2, vec2};
-use lightcraft_catalog::PhotoId;
-use lightcraft_develop::DevelopSettings;
-use lightcraft_engine::presets::{PROFILES, profile_groups};
+use lightz_catalog::PhotoId;
+use lightz_develop::DevelopSettings;
+use lightz_engine::presets::{PROFILES, profile_groups};
 use serde_json::json;
 
 use super::presets::cover_uv;
@@ -13,14 +13,14 @@ use crate::icons::{Icon, paint};
 use crate::state::RightPanel;
 use crate::theme::Tokens;
 use crate::widgets::{divider, icon_button, register};
-use crate::{HoverPreview, LightcraftApp};
+use crate::{HoverPreview, LightzApp};
 
 /// Long edge of the variant thumbnails (px).
 const THUMB_EDGE: usize = 256;
 /// Thumbnail columns.
 const COLUMNS: usize = 2;
 
-pub fn show(app: &mut LightcraftApp, ui: &mut egui::Ui, id: PhotoId) {
+pub fn show(app: &mut LightzApp, ui: &mut egui::Ui, id: PhotoId) {
     let t = Tokens::get(ui.ctx());
     let d = (*app.session.develop_of(id).unwrap_or_default()).clone();
     // header: back + title
@@ -144,7 +144,7 @@ fn with_profile_id(d: &DevelopSettings, profile_id: &str) -> DevelopSettings {
 
 #[allow(clippy::too_many_arguments)]
 fn cell_ui(
-    app: &mut LightcraftApp,
+    app: &mut LightzApp,
     ui: &mut egui::Ui,
     d: &DevelopSettings,
     id: PhotoId,
@@ -198,7 +198,7 @@ fn cell_ui(
     let resp = resp.on_hover_text(format!(
         "{} ({})",
         crate::i18n::profile_label(p_id, p_name),
-        crate::i18n::builtin_label(p_group, lightcraft_engine::presets::profile(p_id).is_some())
+        crate::i18n::builtin_label(p_group, lightz_engine::presets::profile(p_id).is_some())
     ));
     if resp.clicked() {
         if resp.interact_pointer_pos().is_some_and(|q| star.contains(q)) {

@@ -1,20 +1,20 @@
 [package]
-name = "lightcraft-gpu"
+name = "lightz-gpu"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "LightCraft GPU develop pipeline: wgpu compute (WGSL) twin of the CPU pipeline, which stays the reference (L3)"
+description = "LightZ GPU develop pipeline: wgpu compute (WGSL) twin of the CPU pipeline, which stays the reference (L3)"
 
 [lints]
 workspace = true
 
 [dependencies]
-lightcraft-denoise = { workspace = true, optional = true }
-lightcraft-geom = { workspace = true }
-lightcraft-color = { workspace = true }
-lightcraft-raster = { workspace = true }
-lightcraft-develop = { workspace = true }
-lightcraft-pipeline = { workspace = true }
+lightz-denoise = { workspace = true, optional = true }
+lightz-geom = { workspace = true }
+lightz-color = { workspace = true }
+lightz-raster = { workspace = true }
+lightz-develop = { workspace = true }
+lightz-pipeline = { workspace = true }
 log = { workspace = true }
 
 # Native only: Metal / Vulkan / DX12 through wgpu (pure Rust; the drivers are the system's).
@@ -26,8 +26,8 @@ bytemuck = { workspace = true }
 
 [features]
 default = []
-denoise = ["dep:lightcraft-denoise", "lightcraft-denoise/runtime"]
+denoise = ["dep:lightz-denoise", "lightz-denoise/runtime"]
 
 [dev-dependencies]
-lightcraft-scenes = { workspace = true }
-lightcraft-raw = { workspace = true }
+lightz-scenes = { workspace = true }
+lightz-raw = { workspace = true }

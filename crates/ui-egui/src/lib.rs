@@ -1,6 +1,6 @@
-//! LightCraft's egui frontend: a Lightroom-style UI over `lightcraft-engine`.
+//! LightZ's egui frontend: a Lightroom-style UI over `lightz-engine`.
 //!
-//! The UI is thin: every action goes through [`LightcraftApp::run`], which handles UI commands
+//! The UI is thin: every action goes through [`LightzApp::run`], which handles UI commands
 //! (views, panels, zoom — see [`menus::ui_commands`]) and forwards everything else to the engine.
 //! The same entry point serves menus, shortcuts, buttons and the control channel ([`control`]).
 #![forbid(unsafe_code)]
@@ -128,7 +128,7 @@ mod tests_zoom_keys;
 
 use std::sync::mpsc::{Receiver, Sender};
 
-use lightcraft_engine::Session;
+use lightz_engine::Session;
 use serde_json::Value;
 
 pub use control::{ControlRequest, ControlResponse};
@@ -144,7 +144,7 @@ pub type SaveFile = Box<dyn FnMut(&str) -> Option<String>>;
 pub type WriteFn = Box<dyn FnMut(&str, &[u8]) -> Result<(), String>>;
 /// A writer other threads can use (background export).
 pub type SharedWrite = std::sync::Arc<dyn Fn(&str, &[u8]) -> Result<(), String> + Send + Sync>;
-pub type PngEncode = Box<dyn Fn(&lightcraft_raster::Rgba8) -> Vec<u8>>;
+pub type PngEncode = Box<dyn Fn(&lightz_raster::Rgba8) -> Vec<u8>>;
 /// A folder chooser (`None` = cancelled).
 pub type PickFolder = Box<dyn FnMut() -> Option<String>>;
 /// Reveal a file in the system file manager (Finder / Explorer / the folder on Linux).
@@ -159,7 +159,7 @@ pub type OpenAllWithFn = Box<dyn FnMut(&[String], &str) -> Result<(), String>>;
 /// not known).
 pub type ScreenProfileFn = Box<dyn FnMut() -> Option<Vec<u8>>>;
 /// Whether an external editor can be started (its name as in [`Services::open_with`]); the
-/// error says why not and what to do (e.g. PhotoCraft isn't installed).
+/// error says why not and what to do (e.g. PhotoZ isn't installed).
 pub type CheckEditorFn = Box<dyn Fn(&str) -> Result<(), String>>;
 /// Something the host does with the session (web: back up or restore the library in browser
 /// storage); the work may finish asynchronously.
@@ -209,8 +209,8 @@ pub struct Services {
     pub png: Option<PngEncode>,
     /// Show a file in the system file manager (desktop only).
     pub reveal: Option<RevealFn>,
-    /// The host's current log file (`<settings>/logs/lightcraft.log`), which Help ▸ Open Log
-    /// Folder reveals (#260). None where no log is kept: the web, `--memory`, `LIGHTCRAFT_NO_PREFS`.
+    /// The host's current log file (`<settings>/logs/lightz.log`), which Help ▸ Open Log
+    /// Folder reveals (#260). None where no log is kept: the web, `--memory`, `LIGHTZ_NO_PREFS`.
     pub log_file: Option<String>,
     /// Choose a folder (Settings → General → Open Library…; desktop only).
     pub pick_folder: Option<PickFolder>,
@@ -238,9 +238,9 @@ pub struct Services {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Perf {
-    /// Layout of the last frame ([`LightcraftApp::ui`], including commands run from widgets).
+    /// Layout of the last frame ([`LightzApp::ui`], including commands run from widgets).
     pub frame_ms: f64,
-    /// Per-frame logic before layout ([`LightcraftApp::logic`]: control channel, shortcuts,
+    /// Per-frame logic before layout ([`LightzApp::logic`]: control channel, shortcuts,
     /// render polling, pending catalog persistence).
     pub logic_ms: f64,
     /// The whole update of the last frame: logic + layout.
@@ -268,7 +268,7 @@ impl QuitPrompt {
     }
 }
 
-pub struct LightcraftApp {
+pub struct LightzApp {
     pub(crate) model_setup: model_setup::Pending,
     /// Per-catalog-revision caches of library-wide results the panels show every frame
     /// (expensive on big libraries).
@@ -337,7 +337,7 @@ pub struct LightcraftApp {
     pub brush_live: Option<brush_live::LiveStroke>,
     /// What the loupe drew last frame: photo and source ("render", "cached", "embedded", "small",
     /// "thumb", "none").
-    pub loupe_shown: Option<(lightcraft_catalog::PhotoId, &'static str)>,
+    pub loupe_shown: Option<(lightz_catalog::PhotoId, &'static str)>,
     /// The window render the loupe asked for last, by job key (see [`region`]); kept for the few
     /// windows whose textures can be on screen, and for the inspector.
     pub region_view: Option<region::RegionView>,
@@ -346,7 +346,7 @@ pub struct LightcraftApp {
     /// The loupe's render sizes while a pinch or two-finger scroll runs.
     pub(crate) size_hold: region::SizeHold,
     /// (photo, look, window frame size) a window was refused for: it reads more than one render holds.
-    pub(crate) window_refused: Option<(lightcraft_catalog::PhotoId, u64, usize)>,
+    pub(crate) window_refused: Option<(lightz_catalog::PhotoId, u64, usize)>,
     pub(crate) region_tiles: std::collections::HashMap<(bool, u64), region::RegionView>,
     /// The window render each pane of Compare / Reference asked for last (left, right), as
     /// [`Self::region_view`] is for the loupe.
@@ -406,7 +406,7 @@ pub struct LightcraftApp {
     pub activity_expanded: bool,
 }
 
-impl LightcraftApp {
+impl LightzApp {
     pub fn new(mut session: Session, services: Services) -> Self {
         // AI mask requests run on the model's worker; frames apply their results (never wait)
         session.segmenter.background = true;
@@ -512,7 +512,7 @@ impl LightcraftApp {
         let params = if id == "crop.aspect"
             && params.get("aspect").and_then(Value::as_str) == Some("toggle")
             && self.crop_tool_aspect().is_some()
-            && self.session.active().and_then(|id| self.session.develop_of(id)).is_some_and(|d| d.crop == lightcraft_develop::Crop::default())
+            && self.session.active().and_then(|id| self.session.develop_of(id)).is_some_and(|d| d.crop == lightz_develop::Crop::default())
         {
             serde_json::json!({"aspect": "free"})
         } else {
@@ -550,7 +550,7 @@ impl LightcraftApp {
             }
         }
         if r.is_ok() && id == "photo.label" {
-            let label = params.get("label").and_then(Value::as_str).and_then(lightcraft_catalog::ColorLabel::parse);
+            let label = params.get("label").and_then(Value::as_str).and_then(lightz_catalog::ColorLabel::parse);
             let text = match label {
                 Some(label) => {
                     let name =
@@ -582,7 +582,7 @@ impl LightcraftApp {
     pub(crate) fn crop_tool_aspect(&self) -> Option<(u32, u32)> {
         let photo = self.session.active()?;
         let d = self.session.develop_of(photo)?;
-        if d.crop != lightcraft_develop::Crop::default() {
+        if d.crop != lightz_develop::Crop::default() {
             return d.crop.aspect;
         }
         match self.ui.crop_default_aspect.as_ref()? {
@@ -605,7 +605,7 @@ impl LightcraftApp {
     /// Called only after a crop gesture begins, inside its undo transaction.
     pub(crate) fn begin_crop(&mut self) -> Result<(), String> {
         if self.session.interaction.is_some()
-            && self.session.active().and_then(|id| self.session.develop_of(id)).is_some_and(|d| d.crop == lightcraft_develop::Crop::default())
+            && self.session.active().and_then(|id| self.session.develop_of(id)).is_some_and(|d| d.crop == lightz_develop::Crop::default())
             && let Some(aspect) = self.ui.crop_default_aspect.clone()
             && aspect != serde_json::json!("free")
             && let Err(e) = self.session.execute("crop.aspect", &serde_json::json!({"aspect": aspect}))
@@ -681,7 +681,7 @@ impl LightcraftApp {
                 let t = ctx.input(|i| i.time);
                 self.ui.toast = Some((
                     crate::i18n::tr_format!(
-                        "{n} change{} saved in memory but not written to disk: {e} — LightCraft will retry",
+                        "{n} change{} saved in memory but not written to disk: {e} — LightZ will retry",
                         if n == 1 { "" } else { "s" },
                         n = n,
                         e = e
@@ -711,7 +711,7 @@ impl LightcraftApp {
 
     /// Reverse geocoding: say how a place-names download ended (a failure stays readable, with what to do).
     fn place_names_outcome(&mut self, ctx: &egui::Context) {
-        use lightcraft_engine::cmd::geocode::DownloadOutcome;
+        use lightz_engine::cmd::geocode::DownloadOutcome;
         match self.session.place_names.take_outcome() {
             Some(DownloadOutcome::Done(_)) => self.toast(ctx, crate::i18n::tr("Place names downloaded")),
             Some(DownloadOutcome::Cancelled) => self.toast(ctx, crate::i18n::tr("Place names download cancelled")),
@@ -779,7 +779,7 @@ impl LightcraftApp {
     /// (`then`: the AI mask to start afterwards); otherwise a toast.
     pub fn ai_error(&mut self, ctx: &egui::Context, e: impl Into<String>, then: Option<(&str, &str)>) {
         let e = e.into();
-        if lightcraft_engine::segment::Segmenter::AVAILABLE && e.starts_with(lightcraft_engine::segment::NOT_INSTALLED) {
+        if lightz_engine::segment::Segmenter::AVAILABLE && e.starts_with(lightz_engine::segment::NOT_INSTALLED) {
             self.offer_sam_download(then);
         } else {
             self.toast_error(ctx, e);
@@ -956,13 +956,13 @@ impl LightcraftApp {
     /// on other threads (export, denoise, the device warm-up). `false`: the deadline passed first
     /// (the host exits anyway). The app renders nothing afterwards.
     pub fn shutdown(&mut self, timeout: std::time::Duration) -> bool {
-        lightcraft_engine::gpu::begin_shutdown();
+        lightz_engine::gpu::begin_shutdown();
         #[cfg(not(target_arch = "wasm32"))]
         let t0 = std::time::Instant::now();
         let stopped = self.renderer.shutdown(timeout);
         #[cfg(not(target_arch = "wasm32"))]
         let timeout = timeout.saturating_sub(t0.elapsed());
-        let idle = lightcraft_engine::gpu::wait_idle(timeout);
+        let idle = lightz_engine::gpu::wait_idle(timeout);
         stopped && idle
     }
 
@@ -981,7 +981,7 @@ impl LightcraftApp {
             theme::apply(ctx);
             // File → Add from Device lists cards scanned in the background: show hot-plugs
             let repaint = ctx.clone();
-            lightcraft_engine::devices::on_change(move || repaint.request_repaint());
+            lightz_engine::devices::on_change(move || repaint.request_repaint());
             // "is the original there?" (grid, Info panel, Missing Photos) answers from a cache a
             // worker fills: a sleeping NAS or a dropped share never stalls a frame
             let repaint = ctx.clone();
@@ -1049,8 +1049,8 @@ impl LightcraftApp {
                 && !self.tasks.is_running(LABEL)
             {
                 self.ui.auto_import_at = now;
-                let work = move || lightcraft_engine::cmd::library::list_auto_import_folder(&folder);
-                let done = |app: &mut LightcraftApp, _ctx: &egui::Context, listing: Result<Vec<(String, u64)>, String>| {
+                let work = move || lightz_engine::cmd::library::list_auto_import_folder(&folder);
+                let done = |app: &mut LightzApp, _ctx: &egui::Context, listing: Result<Vec<(String, u64)>, String>| {
                     let listing = match listing {
                         Ok(l) => l,
                         Err(e) => return log::debug!("auto import: {e}"),
@@ -1117,20 +1117,20 @@ impl LightcraftApp {
             // GPU device + kernels off the UI thread, once the window is up and only when GPU
             // rendering is on: a broken driver must not keep the window from appearing (issue #136)
             if self.ui.settings.gpu {
-                lightcraft_engine::gpu::warm_up();
+                lightz_engine::gpu::warm_up();
             }
         }
         let mb = self.ui.settings.memory_mb;
         // automatic at startup: leave the engine's default alone
         if self.memory_applied != Some(mb) && (mb > 0 || self.memory_applied.is_some()) {
-            let mb = if mb == 0 { (lightcraft_engine::memory::default_budget() >> 20) as u32 } else { mb };
+            let mb = if mb == 0 { (lightz_engine::memory::default_budget() >> 20) as u32 } else { mb };
             let _ = self.session.execute("app.memoryBudget", &serde_json::json!({"mb": mb}));
         }
         self.memory_applied = Some(mb);
         // the monitor profile (Settings ▸ Display): previews follow it from the next frame
         if self.display_applied.as_ref() != Some(&self.ui.settings.display_profile) {
             let path = self.ui.settings.display_profile.clone();
-            match lightcraft_engine::display::Display::load_opt(&path) {
+            match lightz_engine::display::Display::load_opt(&path) {
                 Ok(d) => {
                     self.renderer.set_display(d);
                     self.display_error = None;
@@ -1179,7 +1179,7 @@ impl LightcraftApp {
         if icc == self.screen_profile {
             return;
         }
-        let display = icc.as_deref().and_then(|bytes| match lightcraft_engine::display::Display::from_bytes(SCREEN_PROFILE, bytes) {
+        let display = icc.as_deref().and_then(|bytes| match lightz_engine::display::Display::from_bytes(SCREEN_PROFILE, bytes) {
             Ok(d) => Some(std::sync::Arc::new(d)),
             Err(msg) => {
                 // a profile we can't use: previews stay sRGB, as before #787
@@ -1279,11 +1279,11 @@ impl LightcraftApp {
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(self.window_title()));
     }
 
-    /// "LightCraft — <library name>" (just "LightCraft" for a library that isn't saved).
+    /// "LightZ — <library name>" (just "LightZ" for a library that isn't saved).
     pub fn window_title(&self) -> String {
         match panels::settings::open_library_name(self) {
-            Some(name) => format!("LightCraft — {name}"),
-            None => "LightCraft".to_string(),
+            Some(name) => format!("LightZ — {name}"),
+            None => "LightZ".to_string(),
         }
     }
 
@@ -1374,11 +1374,11 @@ pub struct HoverPreview {
     /// What is previewed (e.g. "Preset: Warm Glow").
     pub label: String,
     /// The photo's settings with the look applied.
-    pub settings: lightcraft_develop::DevelopSettings,
+    pub settings: lightz_develop::DevelopSettings,
 }
 
-pub fn is_bw(d: &lightcraft_develop::DevelopSettings) -> bool {
-    d.treatment == lightcraft_develop::Treatment::Bw || d.profile.id == "lc.mono" || d.profile.id.starts_with("lc.bw.")
+pub fn is_bw(d: &lightz_develop::DevelopSettings) -> bool {
+    d.treatment == lightz_develop::Treatment::Bw || d.profile.id == "lc.mono" || d.profile.id.starts_with("lc.bw.")
 }
 
 /// "Found 3 faces in 2 photos" for a `faces.detect` result.
@@ -1475,7 +1475,7 @@ mod drop_tests {
 /// Results recomputed only when the catalog (or their inputs) change.
 #[derive(Default)]
 pub struct Caches {
-    keyword_tree: Option<(u64, std::sync::Arc<Vec<lightcraft_catalog::KeywordNode>>)>,
+    keyword_tree: Option<(u64, std::sync::Arc<Vec<lightz_catalog::KeywordNode>>)>,
     /// The Keywording box's read-only names (with containing keywords, or Will Export), by library
     /// revision, selection and view.
     keyword_names: Option<(u64, u64, std::sync::Arc<Vec<panels::keywording::Chip>>)>,
@@ -1483,20 +1483,20 @@ pub struct Caches {
     keyword_chips: Option<(u64, u64, std::sync::Arc<Vec<panels::keywording::Chip>>)>,
     /// The Keyword List's tick boxes, by library revision and selection.
     keyword_ticks: Option<(u64, u64, std::sync::Arc<panels::keyword_list::Ticks>)>,
-    folder_tree: Option<(u64, std::sync::Arc<Vec<lightcraft_catalog::FolderNode>>)>,
-    people: Option<(u64, lightcraft_catalog::Filter, std::sync::Arc<Vec<lightcraft_catalog::Person>>)>,
+    folder_tree: Option<(u64, std::sync::Arc<Vec<lightz_catalog::FolderNode>>)>,
+    people: Option<(u64, lightz_catalog::Filter, std::sync::Arc<Vec<lightz_catalog::Person>>)>,
     suggestions: Option<(u64, std::sync::Arc<Vec<String>>)>,
     counts: Option<(u64, LibraryCounts)>,
-    date_groups: Option<(u64, std::sync::Arc<Vec<lightcraft_catalog::DateGroup>>)>,
+    date_groups: Option<(u64, std::sync::Arc<Vec<lightz_catalog::DateGroup>>)>,
     filter_values: Option<(u64, std::sync::Arc<FilterValues>)>,
-    album_counts: Option<(u64, std::sync::Arc<std::collections::HashMap<lightcraft_catalog::AlbumId, usize>>)>,
+    album_counts: Option<(u64, std::sync::Arc<std::collections::HashMap<lightz_catalog::AlbumId, usize>>)>,
     /// How often the album counts were recomputed (tests check that unchanged frames don't).
     pub album_count_scans: usize,
     /// What the open smart-album rule dialog shows besides the rules ([`Caches::rules_view`]).
     rules_view: Option<(u64, std::sync::Arc<RulesView>)>,
     pub rules_view_scans: usize,
     /// The problems of every saved smart album that has some ([`Caches::smart_album_problems`]).
-    smart_problems: Option<(u64, std::sync::Arc<std::collections::HashMap<lightcraft_catalog::AlbumId, Vec<lightcraft_catalog::rules::Problem>>>)>,
+    smart_problems: Option<(u64, std::sync::Arc<std::collections::HashMap<lightz_catalog::AlbumId, Vec<lightz_catalog::rules::Problem>>>)>,
     pub smart_problem_scans: usize,
     /// AI denoise: what the pump last saw, the model list and the downloads being watched.
     pub denoise: panels::denoise::Ui,
@@ -1550,7 +1550,7 @@ pub struct FilterValues {
 /// What the smart-album rule dialog shows besides the rules themselves: their problems (each row
 /// marks its own), how many photos they match and the albums an Album rule picks from.
 pub struct RulesView {
-    pub problems: Vec<lightcraft_catalog::rules::Problem>,
+    pub problems: Vec<lightz_catalog::rules::Problem>,
     pub count: usize,
     pub albums: Vec<album_picker::AlbumEntry>,
 }
@@ -1562,7 +1562,7 @@ pub(crate) fn key_of(parts: impl std::hash::Hash) -> u64 {
 
 impl Caches {
     /// The folders the library's photos were imported from.
-    pub fn folder_tree(&mut self, cat: &lightcraft_catalog::Catalog) -> std::sync::Arc<Vec<lightcraft_catalog::FolderNode>> {
+    pub fn folder_tree(&mut self, cat: &lightz_catalog::Catalog) -> std::sync::Arc<Vec<lightz_catalog::FolderNode>> {
         match &self.folder_tree {
             Some((r, t)) if *r == cat.revision => t.clone(),
             _ => {
@@ -1573,7 +1573,7 @@ impl Caches {
         }
     }
     /// The library's keyword tree.
-    pub fn keyword_tree(&mut self, cat: &lightcraft_catalog::Catalog) -> std::sync::Arc<Vec<lightcraft_catalog::KeywordNode>> {
+    pub fn keyword_tree(&mut self, cat: &lightz_catalog::Catalog) -> std::sync::Arc<Vec<lightz_catalog::KeywordNode>> {
         match &self.keyword_tree {
             Some((r, t)) if *r == cat.revision => t.clone(),
             _ => {
@@ -1587,8 +1587,8 @@ impl Caches {
     /// (`export`), or the keywords with those containing them.
     pub(crate) fn keyword_names(
         &mut self,
-        cat: &lightcraft_catalog::Catalog,
-        selection: &[lightcraft_catalog::PhotoId],
+        cat: &lightz_catalog::Catalog,
+        selection: &[lightz_catalog::PhotoId],
         export: bool,
     ) -> std::sync::Arc<Vec<panels::keywording::Chip>> {
         let key = key_of((selection, export));
@@ -1608,8 +1608,8 @@ impl Caches {
     /// The selection's keywords (the Keywording box's chips).
     pub(crate) fn keyword_chips(
         &mut self,
-        cat: &lightcraft_catalog::Catalog,
-        selection: &[lightcraft_catalog::PhotoId],
+        cat: &lightz_catalog::Catalog,
+        selection: &[lightz_catalog::PhotoId],
     ) -> std::sync::Arc<Vec<panels::keywording::Chip>> {
         let key = key_of(selection);
         match &self.keyword_chips {
@@ -1624,8 +1624,8 @@ impl Caches {
     /// How many selected photos have each keyword (the Keyword List's tick boxes).
     pub(crate) fn keyword_ticks(
         &mut self,
-        cat: &lightcraft_catalog::Catalog,
-        selection: &[lightcraft_catalog::PhotoId],
+        cat: &lightz_catalog::Catalog,
+        selection: &[lightz_catalog::PhotoId],
     ) -> std::sync::Arc<panels::keyword_list::Ticks> {
         let key = key_of(selection);
         match &self.keyword_ticks {
@@ -1641,10 +1641,10 @@ impl Caches {
     /// with photo counts.
     pub fn people(
         &mut self,
-        cat: &lightcraft_catalog::Catalog,
-        filter: &lightcraft_catalog::Filter,
-    ) -> std::sync::Arc<Vec<lightcraft_catalog::Person>> {
-        let key = lightcraft_catalog::Filter { person: None, ..filter.clone() };
+        cat: &lightz_catalog::Catalog,
+        filter: &lightz_catalog::Filter,
+    ) -> std::sync::Arc<Vec<lightz_catalog::Person>> {
+        let key = lightz_catalog::Filter { person: None, ..filter.clone() };
         match &self.people {
             Some((r, f, t)) if *r == cat.revision && *f == key => t.clone(),
             _ => {
@@ -1655,7 +1655,7 @@ impl Caches {
         }
     }
     /// All Photos / Picks / Recently Deleted counts.
-    pub fn counts(&mut self, cat: &lightcraft_catalog::Catalog) -> LibraryCounts {
+    pub fn counts(&mut self, cat: &lightz_catalog::Catalog) -> LibraryCounts {
         if let Some((r, c)) = self.counts
             && r == cat.revision
         {
@@ -1665,7 +1665,7 @@ impl Caches {
         for p in cat.photos() {
             if p.in_library() {
                 c.total += 1;
-                if p.flag == lightcraft_catalog::Flag::Pick {
+                if p.flag == lightz_catalog::Flag::Pick {
                     c.picks += 1;
                 }
             } else if p.deleted && !p.local {
@@ -1676,7 +1676,7 @@ impl Caches {
         c
     }
     /// Everyone named on a face in the library (for completing a name as it is typed).
-    pub fn person_names(&mut self, cat: &lightcraft_catalog::Catalog) -> std::sync::Arc<Vec<String>> {
+    pub fn person_names(&mut self, cat: &lightz_catalog::Catalog) -> std::sync::Arc<Vec<String>> {
         match &self.person_names {
             Some((r, v)) if *r == cat.revision => v.clone(),
             _ => {
@@ -1687,7 +1687,7 @@ impl Caches {
         }
     }
     /// The By Date tree.
-    pub fn date_groups(&mut self, cat: &lightcraft_catalog::Catalog) -> std::sync::Arc<Vec<lightcraft_catalog::DateGroup>> {
+    pub fn date_groups(&mut self, cat: &lightz_catalog::Catalog) -> std::sync::Arc<Vec<lightz_catalog::DateGroup>> {
         match &self.date_groups {
             Some((r, g)) if *r == cat.revision => g.clone(),
             _ => {
@@ -1698,7 +1698,7 @@ impl Caches {
         }
     }
     /// Cameras, lenses and keywords in the library (filter bar pickers).
-    pub fn filter_values(&mut self, cat: &lightcraft_catalog::Catalog) -> std::sync::Arc<FilterValues> {
+    pub fn filter_values(&mut self, cat: &lightz_catalog::Catalog) -> std::sync::Arc<FilterValues> {
         match &self.filter_values {
             Some((r, v)) if *r == cat.revision => v.clone(),
             _ => {
@@ -1720,7 +1720,7 @@ impl Caches {
         }
     }
     /// Keyword suggestions for a photo with `current` keywords and the typed `prefix`.
-    pub fn suggestions(&mut self, cat: &lightcraft_catalog::Catalog, current: &[String], prefix: &str, n: usize) -> std::sync::Arc<Vec<String>> {
+    pub fn suggestions(&mut self, cat: &lightz_catalog::Catalog, current: &[String], prefix: &str, n: usize) -> std::sync::Arc<Vec<String>> {
         let k = key_of((cat.revision, current, prefix, n));
         match &self.suggestions {
             Some((h, v)) if *h == k => v.clone(),
@@ -1741,8 +1741,8 @@ impl Caches {
     /// rules, the language or (for "in the last…" rules) the minute changes, not every frame.
     pub fn rules_view(
         &mut self,
-        cat: &lightcraft_catalog::Catalog,
-        rules: &lightcraft_catalog::RuleSet,
+        cat: &lightz_catalog::Catalog,
+        rules: &lightz_catalog::RuleSet,
         editing: Option<u64>,
         folder: Option<String>,
         now: &str,
@@ -1756,10 +1756,10 @@ impl Caches {
             return v.clone();
         }
         if relative {
-            lightcraft_catalog::rules::set_now(Some(now.to_string()));
+            lightz_catalog::rules::set_now(Some(now.to_string()));
         }
-        let problems = rules.check_for(cat, editing.map(lightcraft_catalog::AlbumId));
-        let filter = lightcraft_catalog::Filter { rule_set: Some(rules.clone()), library_folder: folder, ..Default::default() };
+        let problems = rules.check_for(cat, editing.map(lightz_catalog::AlbumId));
+        let filter = lightz_catalog::Filter { rule_set: Some(rules.clone()), library_folder: folder, ..Default::default() };
         let count = if problems.is_empty() { cat.query(&filter, &Default::default()).len() } else { 0 };
         let v = std::sync::Arc::new(RulesView { problems, count, albums: panels::dialogs::album_entries(cat, editing) });
         self.rules_view_scans += 1;
@@ -1771,8 +1771,8 @@ impl Caches {
     /// for the sidebar's ⚠ marks: worked out again only when the catalog changes.
     pub fn smart_album_problems(
         &mut self,
-        cat: &lightcraft_catalog::Catalog,
-    ) -> std::sync::Arc<std::collections::HashMap<lightcraft_catalog::AlbumId, Vec<lightcraft_catalog::rules::Problem>>> {
+        cat: &lightz_catalog::Catalog,
+    ) -> std::sync::Arc<std::collections::HashMap<lightz_catalog::AlbumId, Vec<lightz_catalog::rules::Problem>>> {
         if let Some((rev, v)) = &self.smart_problems
             && *rev == cat.revision
         {
@@ -1788,9 +1788,9 @@ impl Caches {
 
     pub fn album_counts(
         &mut self,
-        cat: &lightcraft_catalog::Catalog,
+        cat: &lightz_catalog::Catalog,
         now: &str,
-    ) -> std::sync::Arc<std::collections::HashMap<lightcraft_catalog::AlbumId, usize>> {
+    ) -> std::sync::Arc<std::collections::HashMap<lightz_catalog::AlbumId, usize>> {
         let relative = cat.albums().any(|a| a.smart.as_ref().is_some_and(|f| f.depends_on_now()));
         let minute = if relative { now.get(..16).unwrap_or(now) } else { "" };
         let k = key_of((cat.revision, minute));
@@ -1799,7 +1799,7 @@ impl Caches {
             _ => {
                 if relative {
                     // "in the last N days" counts back from the session clock, as in the grid
-                    lightcraft_catalog::rules::set_now(Some(now.to_string()));
+                    lightz_catalog::rules::set_now(Some(now.to_string()));
                 }
                 let v: std::sync::Arc<std::collections::HashMap<_, _>> =
                     std::sync::Arc::new(cat.albums().map(|a| (a.id, cat.album_count(a.id))).collect());
@@ -1813,7 +1813,7 @@ impl Caches {
 
 #[cfg(test)]
 mod cache_tests {
-    use lightcraft_catalog::{Album, AlbumId, Catalog, Filter, Op, Photo, PhotoId, RuleSet, Source};
+    use lightz_catalog::{Album, AlbumId, Catalog, Filter, Op, Photo, PhotoId, RuleSet, Source};
 
     fn photo(id: u64, captured: &str, rating: u8) -> Op {
         let mut p = Photo::new(PhotoId(id), Source::Demo { scene: 0 }, &format!("p{id}.jpg"), "JPEG", 60, 40, "2026-01-01T00:00:00");
@@ -1858,7 +1858,7 @@ mod cache_tests {
         // an hour later the 11:59:30 photo has left "in the last hour", with no catalog change
         assert_eq!(c.album_counts(&cat, "2026-09-30T13:00:10")[&AlbumId(11)], 0);
         assert_eq!(c.album_count_scans, 4);
-        lightcraft_catalog::rules::set_now(None);
+        lightz_catalog::rules::set_now(None);
     }
 
     /// The rule dialog's problems, live count and album list are worked out once per change to the
@@ -1885,7 +1885,7 @@ mod cache_tests {
         assert_eq!(c.rules_view(&cat, &rules(3), None, None, now).count, 2, "a catalog change");
         assert_eq!(c.rules_view_scans, 4);
         // the sidebar's problems
-        cat.apply(Op::AddAlbum { album: lightcraft_catalog::Album::new(AlbumId(20), "Trip") }).unwrap();
+        cat.apply(Op::AddAlbum { album: lightz_catalog::Album::new(AlbumId(20), "Trip") }).unwrap();
         cat.apply(smart(21, serde_json::json!({"rules": [{"field": "album", "op": "is", "value": 20}]}))).unwrap();
         assert!(c.smart_album_problems(&cat).get(&AlbumId(21)).is_none_or(Vec::is_empty));
         for _ in 0..10 {

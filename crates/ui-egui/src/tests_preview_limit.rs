@@ -42,7 +42,7 @@ fn render_sizes_move_in_steps() {
 // would evict the open photo's single full-resolution source (review of #323)
 #[test]
 fn prefetch_and_stand_ins_never_ask_for_the_full_source_level() {
-    use lightcraft_engine::SourceLevel;
+    use lightz_engine::SourceLevel;
     let s = with_limit(0);
     for wanted in [1000.0, 2560.0, 3024.0, 6000.0, 48000.0] {
         assert!(s.prefetch_edge(wanted, 6000, BIG) <= SourceLevel::Preview.max_edge(), "{wanted}");
@@ -143,7 +143,7 @@ mod in_the_loupe {
 
     use crate::headless::Headless;
     use crate::render::Slot;
-    use crate::{LightcraftApp, Services};
+    use crate::{LightzApp, Services};
 
     const T: Duration = Duration::from_secs(20);
     const SETTLE: Duration = Duration::from_secs(120);
@@ -155,7 +155,7 @@ mod in_the_loupe {
 
     fn detail_in(size: [f32; 2]) -> (Headless, usize) {
         let services = Services { png: None, ..Default::default() };
-        let app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), services);
+        let app = LightzApp::new(lightz_engine::Session::with_demo(), services);
         let mut h = Headless::new(app, size, 1.0);
         let r = h.request("ui.set", json!({"view": "detail", "right": "none", "filmstrip": false}), T);
         assert_eq!(r["ok"], true, "{r}");
@@ -212,7 +212,7 @@ mod in_the_loupe {
         h.settle(SETTLE);
         let id = h.app.session.active().expect("a photo");
         let d = h.app.session.develop_of(id).expect("settings");
-        assert!(matches!(crate::panels::detail::view_overlay(&h.app, &d), lightcraft_pipeline::Overlay::Mask { .. }), "the mask overlay is shown");
+        assert!(matches!(crate::panels::detail::view_overlay(&h.app, &d), lightz_pipeline::Overlay::Mask { .. }), "the mask overlay is shown");
         assert_eq!((h.app.ui.zoom, h.app.ui.pan), (zoom, pan), "showing the overlay keeps zoom and pan");
         let main = rendered_long_edge(&h);
         assert!(main <= 2560 && main < native, "native {native}: the whole-frame render is {main}");
@@ -373,10 +373,10 @@ mod in_the_loupe {
         let (mut h, _) = detail();
         let id = h.app.session.active().unwrap();
         let mut s = (*h.app.session.develop_of(id).unwrap()).clone();
-        s.spots.push(lightcraft_develop::Spot {
-            points: vec![lightcraft_geom::Point::new(0.5, 0.5)],
+        s.spots.push(lightz_develop::Spot {
+            points: vec![lightz_geom::Point::new(0.5, 0.5)],
             size: 0.01,
-            source_offset: Some(lightcraft_geom::Point::new(0.05, 0.0)),
+            source_offset: Some(lightz_geom::Point::new(0.05, 0.0)),
             ..Default::default()
         });
         h.app.session.set_develop(id, s, "Spot").unwrap();
@@ -483,7 +483,7 @@ mod in_the_loupe {
                 break;
             }
         }
-        assert!(!h.app.session.media.has_source(id, lightcraft_engine::SourceLevel::Full), "the original is still decoding");
+        assert!(!h.app.session.media.has_source(id, lightz_engine::SourceLevel::Full), "the original is still decoding");
         assert_eq!(pending(&h), 1, "one window job decodes it");
         h.settle(SETTLE);
         assert!(tile(&h, Slot::Region).is_some() && tile(&h, Slot::RegionBefore).is_some(), "both windows arrived");
@@ -565,7 +565,7 @@ mod in_the_loupe {
         assert_eq!(region_tile(&h), None);
     }
 
-    /// `cargo test -p lightcraft-ui-egui --release profile_slider_drag -- --ignored --nocapture`:
+    /// `cargo test -p lightz-ui-egui --release profile_slider_drag -- --ignored --nocapture`:
     /// milliseconds from a slider tick to the loupe showing it, at 100 % and 400 % of the demo
     /// library's 24 MP photos (what the maintainers asked for in the review of #351).
     #[test]
@@ -817,10 +817,10 @@ mod in_the_loupe {
 
     /// Load a Display P3 monitor profile (`app.displayProfile`), as Settings ▸ Display does.
     fn use_display_profile(h: &mut Headless) {
-        let dir = std::env::temp_dir().join(format!("lightcraft-zoom-display-{}-{:?}", std::process::id(), std::thread::current().id()));
+        let dir = std::env::temp_dir().join(format!("lightz-zoom-display-{}-{:?}", std::process::id(), std::thread::current().id()));
         std::fs::create_dir_all(&dir).expect("temp dir");
         let path = dir.join("p3.icc");
-        std::fs::write(&path, lightcraft_codecs::icc::write_named(lightcraft_codecs::NamedSpace::DisplayP3)).expect("profile written");
+        std::fs::write(&path, lightz_codecs::icc::write_named(lightz_codecs::NamedSpace::DisplayP3)).expect("profile written");
         let r = h.request("engine.execute", json!({"command": "app.displayProfile", "params": {"path": path.to_string_lossy()}}), T);
         assert_eq!(r["ok"], true, "{r}");
         assert!(h.app.renderer.display_id().is_some());
@@ -873,7 +873,7 @@ mod in_the_loupe {
         h
     }
 
-    fn native_of(h: &Headless, id: lightcraft_catalog::PhotoId) -> usize {
+    fn native_of(h: &Headless, id: lightz_catalog::PhotoId) -> usize {
         let p = h.app.session.catalog.photo(id).expect("in the catalog");
         p.width.max(p.height) as usize
     }
@@ -883,7 +883,7 @@ mod in_the_loupe {
     #[test]
     fn compare_at_one_to_one_gets_a_sharp_window_per_pane() {
         let h = compare_at(crate::state::Zoom::Percent(100.0));
-        let (sel, cand) = h.app.ui.compare.map(|(a, b)| (lightcraft_catalog::PhotoId(a), lightcraft_catalog::PhotoId(b))).expect("a pair");
+        let (sel, cand) = h.app.ui.compare.map(|(a, b)| (lightz_catalog::PhotoId(a), lightz_catalog::PhotoId(b))).expect("a pair");
         for (i, id) in [(0u8, sel), (1u8, cand)] {
             let whole = h.app.renderer.textures.get(&Slot::Compare(i)).expect("the whole-frame render");
             assert!(whole.size[0].max(whole.size[1]) <= 2560, "pane {i}: the whole frame stays small");
@@ -893,7 +893,7 @@ mod in_the_loupe {
             let tex = h.app.renderer.textures.get(&Slot::CompareRegion(i)).unwrap_or_else(|| panic!("pane {i}: its texture"));
             assert_eq!(tex.photo, id);
             assert!(tex.size[0] >= 600 && tex.size[1] >= 600, "pane {i}: it covers the pane: {:?}", tex.size);
-            assert!(h.app.session.media.has_source(id, lightcraft_engine::SourceLevel::Full), "pane {i}: both originals stay decoded");
+            assert!(h.app.session.media.has_source(id, lightz_engine::SourceLevel::Full), "pane {i}: both originals stay decoded");
         }
     }
 

@@ -1,4 +1,4 @@
-//! Where LightCraft keeps per-user data on this machine: the config folder (app settings, camera
+//! Where LightZ keeps per-user data on this machine: the config folder (app settings, camera
 //! profiles, face and denoise models).
 //!
 //! Hosts that have a file system (the desktop app, the CLI, the MCP server) share these defaults so a model
@@ -18,7 +18,7 @@ enum Platform {
     Other,
 }
 
-/// LightCraft's settings folder. A nonempty `$LIGHTCRAFT_CONFIG_DIR` overrides the platform default.
+/// LightZ's settings folder. A nonempty `$LIGHTZ_CONFIG_DIR` overrides the platform default.
 /// The override is the complete directory; no application-name suffix is appended. An explicitly
 /// empty value disables the settings directory instead of falling back to a personal profile.
 pub fn config_dir() -> Option<PathBuf> {
@@ -33,34 +33,34 @@ pub fn config_dir() -> Option<PathBuf> {
 }
 
 fn config_dir_with(platform: Platform, env: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
-    if let Some(dir) = env("LIGHTCRAFT_CONFIG_DIR") {
+    if let Some(dir) = env("LIGHTZ_CONFIG_DIR") {
         return (!dir.is_empty()).then(|| PathBuf::from(dir));
     }
     match platform {
-        Platform::Mac => env("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/LightCraft")),
-        Platform::Windows => env("APPDATA").map(|a| PathBuf::from(a).join("LightCraft")),
+        Platform::Mac => env("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/LightZ")),
+        Platform::Windows => env("APPDATA").map(|a| PathBuf::from(a).join("LightZ")),
         Platform::Other => {
-            env("XDG_CONFIG_HOME").map(PathBuf::from).or_else(|| env("HOME").map(|h| PathBuf::from(h).join(".config"))).map(|c| c.join("lightcraft"))
+            env("XDG_CONFIG_HOME").map(PathBuf::from).or_else(|| env("HOME").map(|h| PathBuf::from(h).join(".config"))).map(|c| c.join("lightz"))
         }
     }
 }
 
-/// Where face models are kept: `$LIGHTCRAFT_FACE_MODELS` if set, else `<config>/models`.
+/// Where face models are kept: `$LIGHTZ_FACE_MODELS` if set, else `<config>/models`.
 pub fn default_face_models_dir() -> Option<PathBuf> {
-    std::env::var_os("LIGHTCRAFT_FACE_MODELS").filter(|v| !v.is_empty()).map(PathBuf::from).or_else(|| config_dir().map(|d| d.join("models")))
+    std::env::var_os("LIGHTZ_FACE_MODELS").filter(|v| !v.is_empty()).map(PathBuf::from).or_else(|| config_dir().map(|d| d.join("models")))
 }
 
-/// Where opt-in denoise models are kept: `$LIGHTCRAFT_DENOISE_MODELS` if set, else `<config>/denoise-models`.
+/// Where opt-in denoise models are kept: `$LIGHTZ_DENOISE_MODELS` if set, else `<config>/denoise-models`.
 pub fn default_denoise_models_dir() -> Option<PathBuf> {
-    std::env::var_os("LIGHTCRAFT_DENOISE_MODELS")
+    std::env::var_os("LIGHTZ_DENOISE_MODELS")
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
         .or_else(|| config_dir().map(|d| d.join("denoise-models")))
 }
 
-/// Where the SAM 3 model is kept: `$LIGHTCRAFT_SAM3_DIR` if set, else `<config>/models/sam3`.
+/// Where the SAM 3 model is kept: `$LIGHTZ_SAM3_DIR` if set, else `<config>/models/sam3`.
 pub fn default_sam3_dir() -> Option<PathBuf> {
-    sam3_dir(std::env::var_os("LIGHTCRAFT_SAM3_DIR"), config_dir())
+    sam3_dir(std::env::var_os("LIGHTZ_SAM3_DIR"), config_dir())
 }
 
 /// [`default_sam3_dir`] for a given override and config folder: a non-empty override wins.
@@ -108,7 +108,7 @@ mod config_tests {
     fn config_override_wins_without_reading_user_profile() {
         for platform in [Platform::Mac, Platform::Windows, Platform::Other] {
             let actual = config_dir_with(platform, |name| {
-                assert_eq!(name, "LIGHTCRAFT_CONFIG_DIR");
+                assert_eq!(name, "LIGHTZ_CONFIG_DIR");
                 Some(OsString::from("isolated/settings"))
             });
             assert_eq!(actual, Some(PathBuf::from("isolated/settings")));
@@ -120,7 +120,7 @@ mod config_tests {
         for platform in [Platform::Mac, Platform::Windows, Platform::Other] {
             assert_eq!(
                 config_dir_with(platform, |name| {
-                    assert_eq!(name, "LIGHTCRAFT_CONFIG_DIR");
+                    assert_eq!(name, "LIGHTZ_CONFIG_DIR");
                     Some(OsString::new())
                 }),
                 None
@@ -131,10 +131,10 @@ mod config_tests {
     #[test]
     fn config_unset_override_keeps_platform_defaults() {
         let vars = [("HOME", "/user"), ("APPDATA", "/roaming"), ("XDG_CONFIG_HOME", "/xdg")];
-        assert_eq!(resolve(Platform::Mac, &vars), Some(PathBuf::from("/user/Library/Application Support/LightCraft")));
-        assert_eq!(resolve(Platform::Windows, &vars), Some(PathBuf::from("/roaming/LightCraft")));
-        assert_eq!(resolve(Platform::Other, &vars), Some(PathBuf::from("/xdg/lightcraft")));
-        assert_eq!(resolve(Platform::Other, &[("HOME", "/user")]), Some(PathBuf::from("/user/.config/lightcraft")));
+        assert_eq!(resolve(Platform::Mac, &vars), Some(PathBuf::from("/user/Library/Application Support/LightZ")));
+        assert_eq!(resolve(Platform::Windows, &vars), Some(PathBuf::from("/roaming/LightZ")));
+        assert_eq!(resolve(Platform::Other, &vars), Some(PathBuf::from("/xdg/lightz")));
+        assert_eq!(resolve(Platform::Other, &[("HOME", "/user")]), Some(PathBuf::from("/user/.config/lightz")));
         for platform in [Platform::Mac, Platform::Windows, Platform::Other] {
             assert_eq!(resolve(platform, &[]), None);
         }
@@ -153,7 +153,7 @@ mod config_tests {
 mod tests {
     use super::*;
 
-    /// A non-empty `LIGHTCRAFT_SAM3_DIR` wins; unset or empty falls back to `<config>/models/sam3` (issue #619).
+    /// A non-empty `LIGHTZ_SAM3_DIR` wins; unset or empty falls back to `<config>/models/sam3` (issue #619).
     #[test]
     fn sam3_dir_prefers_the_override() {
         let config = PathBuf::from("cfg");

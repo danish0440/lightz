@@ -1,0 +1,39 @@
+[package]
+name = "lightz-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "LightZ command-line tool: headless render, command listing and the MCP server"
+
+[[bin]]
+name = "lightz-cli"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+lightz-engine = { workspace = true }
+lightz-denoise = { workspace = true }
+lightz-sysmem = { workspace = true }
+lightz-mcp = { workspace = true }
+lightz-ui-egui = { workspace = true }
+lightz-codecs = { workspace = true }
+lightz-raster = { workspace = true }
+lightz-merge = { workspace = true }
+serde_json = { workspace = true }
+dhat = { workspace = true, optional = true }
+
+[features]
+default = ["denoise"]
+denoise = ["lightz-engine/denoise"]
+rawnind-model = ["denoise", "lightz-engine/rawnind-model"]
+# Heap profiling: `cargo run --release -p lightz-cli --features dhat-heap -- snapshot …` counts
+# every allocation (live/peak bytes in `library.memory` / `ui.inspect`) and writes dhat-heap.json
+# (open it in DHAT's viewer: allocation sites by bytes at the peak). Slows allocation-heavy work.
+dhat-heap = ["dep:dhat"]
+
+# Open HEIC/HEIF photos (the optional lightz-heif crate). Not default so distributors choose
+# it (HEVC patents); build with `--features heif` to include it.
+heif = ["lightz-codecs/heif"]

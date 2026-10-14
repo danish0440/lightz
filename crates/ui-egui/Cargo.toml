@@ -1,26 +1,26 @@
 [package]
-name = "lightcraft-ui-egui"
+name = "lightz-ui-egui"
 version.workspace = true
 edition.workspace = true
 rust-version = "1.95"
 license.workspace = true
-description = "LightCraft egui frontend (Lightroom-style UI); swappable — nothing below depends on it (L5)"
+description = "LightZ egui frontend (Lightroom-style UI); swappable — nothing below depends on it (L5)"
 
 [lints]
 workspace = true
 
 [dependencies]
 craft-ui = { workspace = true }
-lightcraft-geom = { workspace = true }
-lightcraft-meta = { workspace = true }
-lightcraft-color = { workspace = true }
-lightcraft-raster = { workspace = true }
-lightcraft-develop = { workspace = true }
-lightcraft-pipeline = { workspace = true }
-lightcraft-catalog = { workspace = true }
+lightz-geom = { workspace = true }
+lightz-meta = { workspace = true }
+lightz-color = { workspace = true }
+lightz-raster = { workspace = true }
+lightz-develop = { workspace = true }
+lightz-pipeline = { workspace = true }
+lightz-catalog = { workspace = true }
 web-time = { workspace = true }
-lightcraft-engine = { workspace = true }
-lightcraft-preview = { workspace = true }
+lightz-engine = { workspace = true }
+lightz-preview = { workspace = true }
 egui = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -28,10 +28,10 @@ log = { workspace = true }
 
 [dev-dependencies]
 egui_kittest = { workspace = true, features = ["wgpu", "snapshot"] }
-lightcraft-denoise = { workspace = true, features = ["runtime"] }
-lightcraft-codecs = { workspace = true }
-lightcraft-faces = { workspace = true }
-lightcraft-merge = { workspace = true }
+lightz-denoise = { workspace = true, features = ["runtime"] }
+lightz-codecs = { workspace = true }
+lightz-faces = { workspace = true }
+lightz-merge = { workspace = true }
 
 [build-dependencies]
 serde_json = { workspace = true }

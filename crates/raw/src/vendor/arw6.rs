@@ -542,9 +542,9 @@ mod tests {
     use super::*;
     use crate::vendor::arw6_testenc::*;
     use crate::vendor::pef::Bits;
-    use lightcraft_tiff::Tiff;
-    use lightcraft_tiff::image::chunk_bytes;
-    use lightcraft_tiff::tags as t;
+    use lightz_tiff::Tiff;
+    use lightz_tiff::image::chunk_bytes;
+    use lightz_tiff::tags as t;
 
     fn planes(w2: usize, h2: usize, seed: u64) -> (Plane, Plane, Plane, Plane) {
         let mut x = seed.max(1);

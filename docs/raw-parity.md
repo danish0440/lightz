@@ -40,7 +40,7 @@ committed table is stale.
   version. The year a model was added is approximated from that Camera Raw major version.
 - **What we decode**: the decoders and their refusals in `crates/raw/src` (`lib.rs` routing, `vendor/*.rs`
   coding variants, `crx.rs` CRX limits, `orf.rs` / `srw.rs` compressed refusals), the import list
-  `lightcraft_engine::import::EXTENSIONS`, and `KNOWN_UNSUPPORTED` in `crates/raw/tests/corpus.rs`. Doc
+  `lightz_engine::import::EXTENSIONS`, and `KNOWN_UNSUPPORTED` in `crates/raw/tests/corpus.rs`. Doc
   claims were not used.
 - **Verified** means a real file from that body decoded from sensor data in: the corpus test over the
   `RAW_SAMPLES` manifest (`xtask/src/main.rs`, 101 CC0 files; bodies whose sample is in
@@ -168,7 +168,7 @@ sample files. A pointer for contributors, not legal advice.
 
 ## Demosaic, levels, crops and lens metadata
 
-| Stage | Target | LightCraft | Status |
+| Stage | Target | LightZ | Status |
 |---|---|---|---|
 | Bayer demosaic | Adobe's own, plus AI "Raw Details" | AHD (default), PPG, bilinear (`crates/raw/src/demosaic`) | 🟡 quality unmeasured against Lightroom; no Raw Details |
 | X-Trans demosaic | ✅ | in-house edge-weighted directional | 🟡 unmeasured |
@@ -188,7 +188,7 @@ sample files. A pointer for contributors, not legal advice.
 
 ## Colour
 
-| Item | Adobe | LightCraft |
+| Item | Adobe | LightZ |
 |---|---|---|
 | Default profile per model | Adobe Standard for every model (1,500 profile names in the bundle) | the DNG's own matrices; else a pooled profile (**4 bundled**: ILCE-7CR, ILCE-7M4, X-H2S, X-T4); else a guarded per-file fit to the camera's embedded JPEG; else spectral matrices (**52 models**, rawtoaces-data); else a neutral matrix |
 | Camera Matching looks | 481 models (plus phone-maker looks) | none (the per-file JPEG fit imitates the camera's own look) |
@@ -216,7 +216,7 @@ essentials user (the default look is what they keep).
 
 ## Lens profiles
 
-| Item | Adobe | LightCraft |
+| Item | Adobe | LightZ |
 |---|---|---|
 | Profile database | 3,635 profile files, 56 makers, auto-selected | **0** (Adobe LCPs never used; no database of our own) |
 | In-file corrections | ✅ | DNG opcodes (WarpRectilinear, FixVignetteRadial, GainMap…) applied; Panasonic / Leica RW2 distortion (79 photos, 13 bodies, 11 lenses); Sony tag 0x7037 distortion for the ILCE-7RM4A (2 lenses) |

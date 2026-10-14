@@ -1,16 +1,16 @@
-//! The LightCraft develop pipeline on the GPU (wgpu compute, WGSL kernels).
+//! The LightZ develop pipeline on the GPU (wgpu compute, WGSL kernels).
 //!
-//! The CPU pipeline (`lightcraft-pipeline`) is the reference: every kernel here is a port of a CPU
-//! stage, both read the same resolved parameters ([`lightcraft_pipeline::Plan`],
-//! [`lightcraft_pipeline::finish::FinishParams`]), and the equivalence tests (`tests/`) render the
+//! The CPU pipeline (`lightz-pipeline`) is the reference: every kernel here is a port of a CPU
+//! stage, both read the same resolved parameters ([`lightz_pipeline::Plan`],
+//! [`lightz_pipeline::finish::FinishParams`]), and the equivalence tests (`tests/`) render the
 //! same settings on both and bound the difference in 8-bit sRGB. Stages without a kernel run on the
 //! CPU inside the same render (per-stage hybrid); see `docs/gpu-pipeline.md`.
 //!
-//! Which backends wgpu may load (DX12 only on Windows; `LIGHTCRAFT_GPU_BACKEND`, `WGPU_BACKEND`) and
+//! Which backends wgpu may load (DX12 only on Windows; `LIGHTZ_GPU_BACKEND`, `WGPU_BACKEND`) and
 //! the crash sentinel around device creation: [`backend`] (issue #136).
 //!
-//! Use [`render`]: it returns `None` when the GPU is unavailable, disabled (`LIGHTCRAFT_GPU=0`,
-//! `LIGHTCRAFT_GPU_BACKEND=off` or [`set_enabled`]), the render does not fit the device, or the device reported an error, ran out
+//! Use [`render`]: it returns `None` when the GPU is unavailable, disabled (`LIGHTZ_GPU=0`,
+//! `LIGHTZ_GPU_BACKEND=off` or [`set_enabled`]), the render does not fit the device, or the device reported an error, ran out
 //! of memory or returned an incomplete image — callers then render on the CPU. [`try_render`] is
 //! the same call reporting why *this* render fell back ([`Fallback`]); [`unavailable_reason`] and
 //! [`last_fallback`] (the latest fallback in the process) feed the status displays (`ui.inspect` →
@@ -25,9 +25,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use lightcraft_develop::DevelopSettings;
-use lightcraft_pipeline::{RenderRequest, Rendered, SourceInfo, StageCache};
-use lightcraft_raster::Rgb32f;
+use lightz_develop::DevelopSettings;
+use lightz_pipeline::{RenderRequest, Rendered, SourceInfo, StageCache};
+use lightz_raster::Rgb32f;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub mod backend;
@@ -70,21 +70,21 @@ fn record_fallback(reason: String) {
 }
 
 /// Why renders do not use the GPU, or `None` when they do (or will, once the device is created).
-/// E.g. "disabled by LIGHTCRAFT_GPU=0", "software adapter (llvmpipe …) skipped", "device lost …".
+/// E.g. "disabled by LIGHTZ_GPU=0", "software adapter (llvmpipe …) skipped", "device lost …".
 /// Never blocks.
 pub fn unavailable_reason() -> Option<String> {
     if env_disabled() {
         #[cfg(not(target_arch = "wasm32"))]
         if backend::env_off() {
-            return Some("disabled by LIGHTCRAFT_GPU_BACKEND=off".into());
+            return Some("disabled by LIGHTZ_GPU_BACKEND=off".into());
         }
-        return Some("disabled by LIGHTCRAFT_GPU=0".into());
+        return Some("disabled by LIGHTZ_GPU=0".into());
     }
     if !ENABLED.load(Ordering::Relaxed) {
         return Some("disabled by the GPU rendering preference (app.gpu)".into());
     }
     if shutting_down() {
-        return Some("LightCraft is closing".into());
+        return Some("LightZ is closing".into());
     }
     if BROKEN.load(Ordering::Relaxed) {
         let r = BROKEN_REASON.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_else(|| "device error".into());
@@ -192,7 +192,7 @@ pub fn reset_failures() {
     let _ = BROKEN_HERE.try_with(|b| *b.borrow_mut() = None);
 }
 
-/// Allow or forbid GPU rendering at runtime (a preference). `LIGHTCRAFT_GPU=0` forbids it for the
+/// Allow or forbid GPU rendering at runtime (a preference). `LIGHTZ_GPU=0` forbids it for the
 /// whole process regardless.
 pub fn set_enabled(on: bool) {
     ENABLED.store(on, Ordering::Relaxed);
@@ -244,16 +244,16 @@ pub fn wait_idle(timeout: std::time::Duration) -> bool {
 #[cfg(all(feature = "denoise", not(target_arch = "wasm32")))]
 pub(crate) fn switched_off() -> Option<String> {
     if env_disabled() {
-        return Some(if backend::env_off() { "disabled by LIGHTCRAFT_GPU_BACKEND=off" } else { "disabled by LIGHTCRAFT_GPU=0" }.into());
+        return Some(if backend::env_off() { "disabled by LIGHTZ_GPU_BACKEND=off" } else { "disabled by LIGHTZ_GPU=0" }.into());
     }
     (!ENABLED.load(Ordering::Relaxed)).then(|| "disabled by the GPU rendering preference (app.gpu)".into())
 }
 
-/// `LIGHTCRAFT_GPU=0` (or `LIGHTCRAFT_GPU_BACKEND=off`): no GPU for the whole process.
+/// `LIGHTZ_GPU=0` (or `LIGHTZ_GPU_BACKEND=off`): no GPU for the whole process.
 fn env_disabled() -> bool {
     static OFF: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *OFF.get_or_init(|| {
-        let off = std::env::var("LIGHTCRAFT_GPU").is_ok_and(|v| matches!(v.trim(), "0" | "off" | "false" | "no"));
+        let off = std::env::var("LIGHTZ_GPU").is_ok_and(|v| matches!(v.trim(), "0" | "off" | "false" | "no"));
         #[cfg(not(target_arch = "wasm32"))]
         let off = off || backend::env_off();
         off
@@ -275,7 +275,7 @@ pub(crate) fn device() -> Option<&'static ctx::Gpu> {
     // creating the device is a long call into the driver: not once the process is ending
     let _work = exit::enter()?;
     GPU.get_or_init(|| {
-        let Some(backends) = backend::compute_backends() else { return Err("disabled by LIGHTCRAFT_GPU_BACKEND=off".into()) };
+        let Some(backends) = backend::compute_backends() else { return Err("disabled by LIGHTZ_GPU_BACKEND=off".into()) };
         let r = backend::with_init_marker(backends, || {
             std::panic::catch_unwind(|| ctx::Gpu::new(backends)).unwrap_or_else(|_| Err("device creation panicked".into()))
         });
@@ -456,13 +456,13 @@ pub fn try_render(
         // the kernel writes 8-bit output: high-bit-depth exports (and soft proofs) render on the CPU
         // Visualize HDR needs the float HDR render: CPU too
         if !enabled()
-            || req.depth != lightcraft_pipeline::OutputDepth::U8
+            || req.depth != lightz_pipeline::OutputDepth::U8
             || req.proof.is_some()
-            || req.overlay == lightcraft_pipeline::Overlay::HdrRange
+            || req.overlay == lightz_pipeline::Overlay::HdrRange
         {
             return Err(Fallback::NotTried);
         }
-        let s = &*lightcraft_pipeline::settings_for(s, req);
+        let s = &*lightz_pipeline::settings_for(s, req);
         // in flight until this returns; not tried once the process is ending (issue #620)
         let _work = exit::enter().ok_or(Fallback::NotTried)?;
         let gpu = device().ok_or(Fallback::NotTried)?;

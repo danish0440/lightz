@@ -2,7 +2,7 @@
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-10 · **Change:** major (created from the code; the full design notes stay in the local `plan/architecture.md`) · **Target:** Adobe Lightroom Classic 15.5 / Lightroom 9.6
 
-How LightCraft is built today. The longer design document (`plan/architecture.md`) is local-only
+How LightZ is built today. The longer design document (`plan/architecture.md`) is local-only
 (`plan/` is gitignored); this page is the committed, current summary. Sizes are Rust lines counted
 on 2026-10-10 (≈ 202,000 tracked lines in 505 files: 24 library crates, 3 apps and `xtask`).
 
@@ -19,7 +19,7 @@ L5 depends on egui, eframe, winit or rfd, and that each crate only uses lower la
 | L3 | `catalog` (11.0k), `gpu` (5.1k), `preview` (1.3k), `merge` (3.8k), `segment` (2.3k) | Library model and persistence; wgpu compute twin of the pipeline; thumbnail/preview cache and job pool; HDR and panorama merge; SAM 3 segmentation |
 | L4 | `engine` (53.2k) | Session, command registry (everything is a command), history, render and export jobs, import, Lightroom catalog and preset import, faces index, view-models |
 | L5 | `ui-egui` (46.9k), `mcp` (2.3k) | The Lightroom-style egui interface (swappable); the MCP server |
-| L6 | `apps/lightcraft` (2.8k), `apps/lightcraft-cli` (1.5k), `apps/lightcraft-web` (3.4k), `xtask` (2.7k) | Desktop app (eframe + wgpu, native menus, control server), CLI (render, commands, calibrate, snapshot, MCP), WASM build, tooling |
+| L6 | `apps/lightz` (2.8k), `apps/lightz-cli` (1.5k), `apps/lightz-web` (3.4k), `xtask` (2.7k) | Desktop app (eframe + wgpu, native menus, control server), CLI (render, commands, calibrate, snapshot, MCP), WASM build, tooling |
 
 ## Data model
 
@@ -48,7 +48,7 @@ L5 depends on egui, eframe, winit or rfd, and that each crate only uses lower la
 3. **GPU** (`gpu`): the same stages in WGSL on Metal / DX12 / Vulkan, checked against the CPU path
    (within 1/255); GPU errors fall back to the CPU (`docs/gpu-pipeline.md`).
 4. **Display and export**: display-profile conversion (`docs/display-profiles.md`); export through
-   one encoder for app, CLI, MCP and web (`lightcraft_engine::export`).
+   one encoder for app, CLI, MCP and web (`lightz_engine::export`).
 
 ## Agent control
 

@@ -6,7 +6,7 @@
 //! grid and carry a margin, so panning by a few pixels re-uses the render and the spatial stages
 //! (clarity, dehaze…) have the context they read around the visible edge.
 
-use lightcraft_engine::pipeline::PixelWindow;
+use lightz_engine::pipeline::PixelWindow;
 
 /// Windows start and end on multiples of this many pixels of the zoomed frame.
 pub const SNAP: usize = 256;
@@ -21,7 +21,7 @@ pub const MAX_SPAN: usize = if cfg!(target_arch = "wasm32") { 3072 } else { 6144
 /// of, and the window. The texture that comes back is drawn at this place of the frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RegionView {
-    pub photo: lightcraft_catalog::PhotoId,
+    pub photo: lightz_catalog::PhotoId,
     /// The Before side of a Before/After view (the photo without its edits).
     pub before: bool,
     pub key: u64,
@@ -37,7 +37,7 @@ impl RegionView {
     ///
     /// While a slider is dragged (`drafting`) a window made for an earlier value of it still
     /// belongs: drafts follow the drag, and waiting for an exact match would show none.
-    pub fn is_current(&self, photo: lightcraft_catalog::PhotoId, full: (usize, usize), settings: u64, drafting: bool) -> bool {
+    pub fn is_current(&self, photo: lightz_catalog::PhotoId, full: (usize, usize), settings: u64, drafting: bool) -> bool {
         self.photo == photo && self.full == full && (drafting || self.settings == settings)
     }
 }
@@ -108,7 +108,7 @@ pub fn plan(settings: &crate::state::AppSettings, v: ViewSizes) -> LoupePlan {
     }
     // a user who chose a size above the preview source level (3840, 5120) means it; otherwise the
     // original is not decoded for the whole-frame render
-    let source_cap = if settings.preview_limit == 0 { lightcraft_engine::SourceLevel::Preview.max_edge() } else { settings.preview_limit as usize };
+    let source_cap = if settings.preview_limit == 0 { lightz_engine::SourceLevel::Preview.max_edge() } else { settings.preview_limit as usize };
     let edge_at = |scale: f32| settings.loupe_edge(drawn_long.min(canvas_long) * scale, v.native_long, v.texture_side).min(source_cap);
     let main_edge = edge_at(scale);
     let frame_edge = settings.window_frame_edge(drawn_long, v.native_long);
@@ -128,7 +128,7 @@ pub const HOLD_SECS: f64 = 0.25;
 /// gesture has been quiet for [`HOLD_SECS`].
 #[derive(Clone, Debug, Default)]
 pub struct SizeHold {
-    photo: Option<lightcraft_catalog::PhotoId>,
+    photo: Option<lightz_catalog::PhotoId>,
     plan: Option<LoupePlan>,
     until: f64,
 }
@@ -136,7 +136,7 @@ pub struct SizeHold {
 impl SizeHold {
     /// The plan to render this frame: `fresh` normally; the plan from before the gesture while
     /// one is running (`gesturing`) and for [`HOLD_SECS`] after. `now` is in seconds.
-    pub fn apply(&mut self, photo: lightcraft_catalog::PhotoId, now: f64, gesturing: bool, fresh: LoupePlan) -> LoupePlan {
+    pub fn apply(&mut self, photo: lightz_catalog::PhotoId, now: f64, gesturing: bool, fresh: LoupePlan) -> LoupePlan {
         if self.photo != Some(photo) {
             *self = SizeHold { photo: Some(photo), plan: Some(fresh), until: f64::NEG_INFINITY };
             return fresh;
@@ -390,7 +390,7 @@ mod tests {
     // Given a pinch from fit to 400 %, the sizes of the first frame hold until the gesture is quiet
     #[test]
     fn a_pinch_holds_the_render_sizes() {
-        use lightcraft_catalog::PhotoId;
+        use lightz_catalog::PhotoId;
         let (fit, zoomed) = (plan(&auto(), sizes(1400.0, 1400.0, 6000)), plan(&auto(), sizes(24000.0, 1400.0, 6000)));
         assert_ne!(fit, zoomed);
         let mut hold = SizeHold::default();
@@ -412,7 +412,7 @@ mod tests {
     // Given another photo, the held sizes are forgotten
     #[test]
     fn another_photo_is_planned_afresh() {
-        use lightcraft_catalog::PhotoId;
+        use lightz_catalog::PhotoId;
         let (fit, zoomed) = (plan(&auto(), sizes(1400.0, 1400.0, 6000)), plan(&auto(), sizes(24000.0, 1400.0, 6000)));
         let mut hold = SizeHold::default();
         hold.apply(PhotoId(1), 0.0, false, fit);
@@ -512,7 +512,7 @@ mod tests {
     // Given a tile rendered for other settings, another photo or another zoom, it is not drawn
     #[test]
     fn a_tile_is_drawn_only_while_it_shows_what_the_loupe_shows() {
-        use lightcraft_catalog::PhotoId;
+        use lightz_catalog::PhotoId;
         let v = RegionView {
             photo: PhotoId(1),
             before: false,

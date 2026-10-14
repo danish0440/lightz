@@ -10,11 +10,11 @@
 
 use std::sync::Arc;
 
-use lightcraft_catalog::{PhotoId, Source};
-use lightcraft_develop::DevelopSettings;
-use lightcraft_merge::{Deghost, Frame, HdrOptions, PanoOptions, Projection};
-use lightcraft_pipeline::{Quality, RenderRequest, SourceInfo};
-use lightcraft_raster::{Rgb32f, Rgba8};
+use lightz_catalog::{PhotoId, Source};
+use lightz_develop::DevelopSettings;
+use lightz_merge::{Deghost, Frame, HdrOptions, PanoOptions, Projection};
+use lightz_pipeline::{Quality, RenderRequest, SourceInfo};
+use lightz_raster::{Rgb32f, Rgba8};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -111,7 +111,7 @@ impl MergeJob {
             .map(|(_, path)| {
                 let bytes = (self.read)(path)?;
                 // a raw without colour matrices of its own starts from the colour it has when opened alone (#965)
-                let f = lightcraft_merge::load_frame_with(&bytes, self.preview, orient, &crate::camera_preview::starting_colour_tags)
+                let f = lightz_merge::load_frame_with(&bytes, self.preview, orient, &crate::camera_preview::starting_colour_tags)
                     .map_err(|e| format!("{path}: {e}"));
                 let k = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                 progress(span.0 + (span.1 - span.0) * k as f32 / n as f32, "Reading photos");
@@ -134,27 +134,27 @@ impl MergeJob {
             MergeKind::Hdr { hdr } => {
                 let frames = self.load(false, progress, (0.0, 0.3))?;
                 let p = sub(0.3, 0.9);
-                let r = lightcraft_merge::merge_hdr(frames, hdr, &p).map_err(err)?;
+                let r = lightz_merge::merge_hdr(frames, hdr, &p).map_err(err)?;
                 let info = json!({
                     "reference": self.sources[r.reference].0.0,
                     "ev": r.ev, "evExif": r.ev_exif,
                     "alignment": r.alignments.iter().map(|a| json!({"model": a.model, "inliers": a.inliers, "rmsPx": a.rms})).collect::<Vec<_>>(),
                 });
                 let ghost = (!r.ghost.data.is_empty()).then(|| r.ghost.oriented(r.orientation));
-                (r.radiance, r.color, r.orientation, r.metadata, r.baseline_exposure, lightcraft_merge::DngSamples::Half, None, info, ghost)
+                (r.radiance, r.color, r.orientation, r.metadata, r.baseline_exposure, lightz_merge::DngSamples::Half, None, info, ghost)
             }
             MergeKind::Panorama { pano } => {
                 let frames = self.load(true, progress, (0.0, 0.25))?;
                 let p = sub(0.25, 0.9);
-                let r = lightcraft_merge::stitch(frames, pano, &p).map_err(err)?;
+                let r = lightz_merge::stitch(frames, pano, &p).map_err(err)?;
                 let info = pano_info(&r, &self.sources);
                 (
                     r.image,
                     r.color,
-                    lightcraft_geom::Orientation::Normal,
+                    lightz_geom::Orientation::Normal,
                     r.metadata,
                     r.baseline_exposure,
-                    lightcraft_merge::DngSamples::U16,
+                    lightz_merge::DngSamples::U16,
                     r.crop,
                     info,
                     None,
@@ -173,7 +173,7 @@ impl MergeJob {
                 for g in 0..groups {
                     let set: Vec<Frame> = it.by_ref().take(b).collect();
                     let p = sub(0.2 + 0.4 * g as f32 / groups as f32, 0.2 + 0.4 * (g + 1) as f32 / groups as f32);
-                    let r = lightcraft_merge::merge_hdr(set, hdr, &p).map_err(err)?;
+                    let r = lightz_merge::merge_hdr(set, hdr, &p).map_err(err)?;
                     let mut f = Frame {
                         image: r.radiance,
                         clip: f32::INFINITY,
@@ -188,16 +188,16 @@ impl MergeJob {
                     merged.push(f);
                 }
                 let p = sub(0.6, 0.9);
-                let r = lightcraft_merge::stitch(merged, pano, &p).map_err(err)?;
+                let r = lightz_merge::stitch(merged, pano, &p).map_err(err)?;
                 let mut info = pano_info(&r, &self.sources);
                 info["bracket"] = json!(b);
                 (
                     r.image,
                     r.color,
-                    lightcraft_geom::Orientation::Normal,
+                    lightz_geom::Orientation::Normal,
                     r.metadata,
                     r.baseline_exposure,
-                    lightcraft_merge::DngSamples::Half,
+                    lightz_merge::DngSamples::Half,
                     r.crop,
                     info,
                     None,
@@ -213,8 +213,8 @@ impl MergeJob {
                 self.sources.iter().map(|(_, p)| std::path::Path::new(p).file_name().and_then(|n| n.to_str()).unwrap_or(p)).collect();
             metadata.caption = Some(format!("Merged from {}", names.join(", ")));
         }
-        metadata.software = Some("LightCraft Photo Merge".into());
-        let dng = lightcraft_merge::write_linear_dng(&image, &color, orientation, &metadata, baseline, samples).map_err(err)?;
+        metadata.software = Some("LightZ Photo Merge".into());
+        let dng = lightz_merge::write_linear_dng(&image, &color, orientation, &metadata, baseline, samples).map_err(err)?;
         info["width"] = json!(image.width);
         info["height"] = json!(image.height);
         let preview = match self.preview {
@@ -226,7 +226,7 @@ impl MergeJob {
     }
 }
 
-fn pano_info(r: &lightcraft_merge::PanoResult, sources: &[(PhotoId, String)]) -> Value {
+fn pano_info(r: &lightz_merge::PanoResult, sources: &[(PhotoId, String)]) -> Value {
     json!({
         "projection": r.projection,
         "used": r.used.iter().filter_map(|&i| sources.get(i).map(|s| s.0.0)).collect::<Vec<_>>(),
@@ -251,7 +251,7 @@ fn render_preview(
     edge: usize,
     auto: bool,
     crop: Option<[f64; 4]>,
-    ghost: Option<&lightcraft_raster::Plane>,
+    ghost: Option<&lightz_raster::Plane>,
 ) -> std::result::Result<Rgba8, String> {
     let (src, info) = crate::files::load_bytes(dng, edge)?;
     let mut s = DevelopSettings::for_raw(info.as_shot_temp, info.as_shot_tint);
@@ -259,10 +259,10 @@ fn render_preview(
         apply_auto(&mut s, &src, &info);
     }
     if let Some(c) = crop {
-        s.crop.geometry.rect = lightcraft_geom::Rect::from_xywh(c[0], c[1], c[2], c[3]);
+        s.crop.geometry.rect = lightz_geom::Rect::from_xywh(c[0], c[1], c[2], c[3]);
     }
     let req = RenderRequest { quality: Quality::Full, apply_crop: false, ..RenderRequest::fit(edge, edge) };
-    let mut img = lightcraft_pipeline::render(&src, &info, &s, &req).image;
+    let mut img = lightz_pipeline::render(&src, &info, &s, &req).image;
     if let Some(g) = ghost {
         let (w, h) = (img.width, img.height);
         for y in 0..h {
@@ -295,7 +295,7 @@ fn render_preview(
 }
 
 fn apply_auto(s: &mut DevelopSettings, src: &Rgb32f, info: &SourceInfo) {
-    let a = lightcraft_pipeline::auto::auto_tone(src, info, s);
+    let a = lightz_pipeline::auto::auto_tone(src, info, s);
     s.light.exposure = a.exposure;
     s.light.contrast = a.contrast;
     s.light.highlights = a.highlights;
@@ -347,7 +347,7 @@ impl Session {
     pub fn plan_merge(&self, kind: MergeKind, finish: MergeFinish, ids: &[PhotoId], preview: bool) -> Result<MergeJob> {
         let mut sources = Vec::new();
         for id in ids {
-            let p = self.catalog.photo(*id).ok_or(lightcraft_catalog::CatalogError::NoPhoto(*id))?;
+            let p = self.catalog.photo(*id).ok_or(lightz_catalog::CatalogError::NoPhoto(*id))?;
             match &p.source {
                 Source::File { path } => sources.push((*id, path.clone())),
                 Source::Demo { .. } => return Err(EngineError::Other(format!("{} is a demo photo; Photo Merge needs photo files", p.file_name))),
@@ -368,7 +368,7 @@ impl Session {
     pub fn finish_merge(&mut self, job: &MergeJob, out: MergeOutput) -> Result<Value> {
         let first = &job.sources.first().ok_or_else(|| EngineError::Other("nothing merged".into()))?.1;
         // a new file under a free name (never replacing one), complete and synced before it appears
-        let path = lightcraft_catalog::safe_file::write_new_unique(&mut output_names(first, job.kind.suffix()), &out.dng)
+        let path = lightz_catalog::safe_file::write_new_unique(&mut output_names(first, job.kind.suffix()), &out.dng)
             .map_err(|e| EngineError::Other(format!("could not write the merged DNG next to {first}: {e}")))?
             .to_string_lossy()
             .to_string();
@@ -393,7 +393,7 @@ impl Session {
             && let Some(d) = self.develop_of(id)
         {
             let mut d = (*d).clone();
-            d.crop.geometry.rect = lightcraft_geom::Rect::from_xywh(c[0], c[1], c[2], c[3]);
+            d.crop.geometry.rect = lightz_geom::Rect::from_xywh(c[0], c[1], c[2], c[3]);
             self.set_develop(id, d, "Auto Crop")?;
         }
         let mut info = out.info;

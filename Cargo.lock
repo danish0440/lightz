@@ -3072,16 +3072,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft"
+name = "lightz"
 version = "0.7.1"
 dependencies = [
  "eframe",
  "egui",
- "lightcraft-codecs",
- "lightcraft-engine",
- "lightcraft-raster",
- "lightcraft-sysmem",
- "lightcraft-ui-egui",
+ "lightz-codecs",
+ "lightz-engine",
+ "lightz-raster",
+ "lightz-sysmem",
+ "lightz-ui-egui",
  "log",
  "muda",
  "objc2 0.6.4",
@@ -3096,14 +3096,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-catalog"
+name = "lightz-catalog"
 version = "0.7.1"
 dependencies = [
  "crc32fast",
- "lightcraft-develop",
- "lightcraft-geom",
- "lightcraft-meta",
- "lightcraft-raw",
+ "lightz-develop",
+ "lightz-geom",
+ "lightz-meta",
+ "lightz-raw",
  "log",
  "proptest",
  "serde",
@@ -3113,23 +3113,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-cli"
+name = "lightz-cli"
 version = "0.7.1"
 dependencies = [
  "dhat",
- "lightcraft-codecs",
- "lightcraft-denoise",
- "lightcraft-engine",
- "lightcraft-mcp",
- "lightcraft-merge",
- "lightcraft-raster",
- "lightcraft-sysmem",
- "lightcraft-ui-egui",
+ "lightz-codecs",
+ "lightz-denoise",
+ "lightz-engine",
+ "lightz-mcp",
+ "lightz-merge",
+ "lightz-raster",
+ "lightz-sysmem",
+ "lightz-ui-egui",
  "serde_json",
 ]
 
 [[package]]
-name = "lightcraft-codecs"
+name = "lightz-codecs"
 version = "0.7.1"
 dependencies = [
  "avif-serialize",
@@ -3140,10 +3140,10 @@ dependencies = [
  "jpeg-decoder",
  "jpeg-encoder",
  "jxl-oxide",
- "lightcraft-color",
- "lightcraft-geom",
- "lightcraft-heif",
- "lightcraft-raster",
+ "lightz-color",
+ "lightz-geom",
+ "lightz-heif",
+ "lightz-raster",
  "moxcms 0.9.1",
  "png",
  "proptest",
@@ -3158,21 +3158,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-color"
+name = "lightz-color"
 version = "0.7.1"
 dependencies = [
- "lightcraft-geom",
+ "lightz-geom",
  "proptest",
  "serde",
 ]
 
 [[package]]
-name = "lightcraft-denoise"
+name = "lightz-denoise"
 version = "0.7.1"
 dependencies = [
  "faer-core",
- "lightcraft-denoise-core",
- "lightcraft-raster",
+ "lightz-denoise-core",
+ "lightz-raster",
  "miniz_oxide 0.8.9",
  "proptest",
  "rayon",
@@ -3184,10 +3184,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-denoise-core"
+name = "lightz-denoise-core"
 version = "0.7.1"
 dependencies = [
- "lightcraft-raster",
+ "lightz-raster",
  "miniz_oxide 0.8.9",
  "proptest",
  "rayon",
@@ -3199,11 +3199,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-develop"
+name = "lightz-develop"
 version = "0.7.1"
 dependencies = [
- "lightcraft-color",
- "lightcraft-geom",
+ "lightz-color",
+ "lightz-geom",
  "miniz_oxide 0.8.9",
  "proptest",
  "serde",
@@ -3211,35 +3211,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-engine"
+name = "lightz-engine"
 version = "0.7.1"
 dependencies = [
  "ab_glyph",
  "harfrust",
  "jxl-oxide",
  "libc",
- "lightcraft-catalog",
- "lightcraft-codecs",
- "lightcraft-color",
- "lightcraft-denoise",
- "lightcraft-denoise-core",
- "lightcraft-develop",
- "lightcraft-faces",
- "lightcraft-fetch",
- "lightcraft-geocode",
- "lightcraft-geom",
- "lightcraft-gpu",
- "lightcraft-heif",
- "lightcraft-lensdb",
- "lightcraft-merge",
- "lightcraft-meta",
- "lightcraft-pipeline",
- "lightcraft-preview",
- "lightcraft-raster",
- "lightcraft-raw",
- "lightcraft-scenes",
- "lightcraft-segment",
- "lightcraft-tiff",
+ "lightz-catalog",
+ "lightz-codecs",
+ "lightz-color",
+ "lightz-denoise",
+ "lightz-denoise-core",
+ "lightz-develop",
+ "lightz-faces",
+ "lightz-fetch",
+ "lightz-geocode",
+ "lightz-geom",
+ "lightz-gpu",
+ "lightz-heif",
+ "lightz-lensdb",
+ "lightz-merge",
+ "lightz-meta",
+ "lightz-pipeline",
+ "lightz-preview",
+ "lightz-raster",
+ "lightz-raw",
+ "lightz-scenes",
+ "lightz-segment",
+ "lightz-tiff",
  "log",
  "miniz_oxide 0.8.9",
  "rayon",
@@ -3251,7 +3251,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-faces"
+name = "lightz-faces"
 version = "0.7.1"
 dependencies = [
  "matrixmultiply",
@@ -3265,7 +3265,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-fetch"
+name = "lightz-fetch"
 version = "0.7.1"
 dependencies = [
  "log",
@@ -3276,7 +3276,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-geocode"
+name = "lightz-geocode"
 version = "0.7.1"
 dependencies = [
  "miniz_oxide 0.8.9",
@@ -3284,7 +3284,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-geom"
+name = "lightz-geom"
 version = "0.7.1"
 dependencies = [
  "proptest",
@@ -3292,25 +3292,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-gpu"
+name = "lightz-gpu"
 version = "0.7.1"
 dependencies = [
  "bytemuck",
- "lightcraft-color",
- "lightcraft-denoise",
- "lightcraft-develop",
- "lightcraft-geom",
- "lightcraft-pipeline",
- "lightcraft-raster",
- "lightcraft-raw",
- "lightcraft-scenes",
+ "lightz-color",
+ "lightz-denoise",
+ "lightz-develop",
+ "lightz-geom",
+ "lightz-pipeline",
+ "lightz-raster",
+ "lightz-raw",
+ "lightz-scenes",
  "log",
  "pollster 1.0.1",
  "wgpu",
 ]
 
 [[package]]
-name = "lightcraft-heif"
+name = "lightz-heif"
 version = "0.7.1"
 dependencies = [
  "heic-rs",
@@ -3318,54 +3318,54 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-inpaint"
+name = "lightz-inpaint"
 version = "0.7.1"
 dependencies = [
  "rayon",
 ]
 
 [[package]]
-name = "lightcraft-lensdb"
+name = "lightz-lensdb"
 version = "0.7.1"
 dependencies = [
- "lightcraft-develop",
- "lightcraft-geom",
+ "lightz-develop",
+ "lightz-geom",
  "quick-xml 0.38.4",
 ]
 
 [[package]]
-name = "lightcraft-mcp"
+name = "lightz-mcp"
 version = "0.7.1"
 dependencies = [
- "lightcraft-codecs",
- "lightcraft-engine",
- "lightcraft-raster",
+ "lightz-codecs",
+ "lightz-engine",
+ "lightz-raster",
  "log",
  "serde_json",
 ]
 
 [[package]]
-name = "lightcraft-merge"
+name = "lightz-merge"
 version = "0.7.1"
 dependencies = [
- "lightcraft-codecs",
- "lightcraft-color",
- "lightcraft-geom",
- "lightcraft-meta",
- "lightcraft-raster",
- "lightcraft-raw",
- "lightcraft-scenes",
+ "lightz-codecs",
+ "lightz-color",
+ "lightz-geom",
+ "lightz-meta",
+ "lightz-raster",
+ "lightz-raw",
+ "lightz-scenes",
  "rayon",
  "serde",
  "thiserror 2.0.21",
 ]
 
 [[package]]
-name = "lightcraft-meta"
+name = "lightz-meta"
 version = "0.7.1"
 dependencies = [
- "lightcraft-geom",
- "lightcraft-tiff",
+ "lightz-geom",
+ "lightz-tiff",
  "proptest",
  "quick-xml 0.38.4",
  "serde",
@@ -3373,17 +3373,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-pipeline"
+name = "lightz-pipeline"
 version = "0.7.1"
 dependencies = [
  "image",
- "lightcraft-color",
- "lightcraft-develop",
- "lightcraft-geom",
- "lightcraft-inpaint",
- "lightcraft-raster",
- "lightcraft-raw",
- "lightcraft-scenes",
+ "lightz-color",
+ "lightz-develop",
+ "lightz-geom",
+ "lightz-inpaint",
+ "lightz-raster",
+ "lightz-raw",
+ "lightz-scenes",
  "proptest",
  "rayon",
  "serde",
@@ -3391,11 +3391,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-preview"
+name = "lightz-preview"
 version = "0.7.1"
 dependencies = [
  "jpeg-encoder",
- "lightcraft-raster",
+ "lightz-raster",
  "log",
  "siphasher",
  "zune-core",
@@ -3403,28 +3403,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-raster"
+name = "lightz-raster"
 version = "0.7.1"
 dependencies = [
  "libc",
- "lightcraft-color",
- "lightcraft-geom",
+ "lightz-color",
+ "lightz-geom",
  "proptest",
  "rayon",
  "serde",
 ]
 
 [[package]]
-name = "lightcraft-raw"
+name = "lightz-raw"
 version = "0.7.1"
 dependencies = [
  "jpeg-encoder",
  "jxl-oxide",
- "lightcraft-color",
- "lightcraft-geom",
- "lightcraft-meta",
- "lightcraft-raster",
- "lightcraft-tiff",
+ "lightz-color",
+ "lightz-geom",
+ "lightz-meta",
+ "lightz-raster",
+ "lightz-tiff",
  "miniz_oxide 0.8.9",
  "proptest",
  "rayon",
@@ -3437,23 +3437,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-scenes"
+name = "lightz-scenes"
 version = "0.7.1"
 dependencies = [
  "image",
- "lightcraft-color",
- "lightcraft-raster",
+ "lightz-color",
+ "lightz-raster",
  "rayon",
  "serde",
 ]
 
 [[package]]
-name = "lightcraft-segment"
+name = "lightz-segment"
 version = "0.7.1"
 dependencies = [
  "candle-core",
  "candle-nn",
- "lightcraft-fetch",
+ "lightz-fetch",
  "log",
  "serde",
  "serde_json",
@@ -3461,11 +3461,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-sysmem"
+name = "lightz-sysmem"
 version = "0.7.1"
 
 [[package]]
-name = "lightcraft-tiff"
+name = "lightz-tiff"
 version = "0.7.1"
 dependencies = [
  "proptest",
@@ -3474,25 +3474,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-ui-egui"
+name = "lightz-ui-egui"
 version = "0.7.1"
 dependencies = [
  "craft-ui",
  "egui",
  "egui_kittest",
- "lightcraft-catalog",
- "lightcraft-codecs",
- "lightcraft-color",
- "lightcraft-denoise",
- "lightcraft-develop",
- "lightcraft-engine",
- "lightcraft-faces",
- "lightcraft-geom",
- "lightcraft-merge",
- "lightcraft-meta",
- "lightcraft-pipeline",
- "lightcraft-preview",
- "lightcraft-raster",
+ "lightz-catalog",
+ "lightz-codecs",
+ "lightz-color",
+ "lightz-denoise",
+ "lightz-develop",
+ "lightz-engine",
+ "lightz-faces",
+ "lightz-geom",
+ "lightz-merge",
+ "lightz-meta",
+ "lightz-pipeline",
+ "lightz-preview",
+ "lightz-raster",
  "log",
  "serde",
  "serde_json",
@@ -3501,18 +3501,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "lightcraft-web"
+name = "lightz-web"
 version = "0.7.1"
 dependencies = [
  "crc32fast",
  "eframe",
  "egui",
  "js-sys",
- "lightcraft-codecs",
- "lightcraft-engine",
- "lightcraft-preview",
- "lightcraft-raster",
- "lightcraft-ui-egui",
+ "lightz-codecs",
+ "lightz-engine",
+ "lightz-preview",
+ "lightz-raster",
+ "lightz-ui-egui",
  "log",
  "serde",
  "serde_json",

@@ -4,7 +4,7 @@
 use serde::Serialize;
 use serde_json::{Value, json};
 
-use crate::LightcraftApp;
+use crate::LightzApp;
 use crate::pick::{PickRequest, Picked};
 use crate::state::{BeforeAfter, Dialog, RightPanel, ViewMode, Zoom};
 
@@ -166,7 +166,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("dialog.export", "Export…", None, "File"),
     ("dialog.contactSheet", "Contact Sheet PDF…", None, "File"),
     ("app.contactSheet", "Export Contact Sheet PDF", None, ""),
-    ("photo.editInPhotoCraft", "Edit in PhotoCraft", Some("Cmd+Shift+E"), "Photo>Edit In"),
+    ("photo.editInPhotoCraft", "Edit in PhotoZ", Some("Cmd+Shift+E"), "Photo>Edit In"),
     ("photo.editInExternal", "Edit in Other Editor", Some("Cmd+Alt+E"), "Photo>Edit In"),
     // {ids?, app?}: the original files themselves (a raw stays a raw: no render, no copy), opened
     // in the other editor, e.g. a raw developer
@@ -186,7 +186,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("file.restoreLibrary", "Restore Library from Backup…", None, "File"),
     ("photo.locate", "Locate Missing File…", None, ""),
     ("dialog.saveMetadataPreset", "Save Metadata Preset…", None, ""),
-    ("app.quit", "Quit LightCraft", Some("Cmd+Q"), "File"),
+    ("app.quit", "Quit LightZ", Some("Cmd+Q"), "File"),
     ("file.importPresets", "Import Profiles & Presets…", None, "File"),
     ("file.exportPresets", "Export Presets…", None, "File"),
     ("file.importKeywords", "Import Keywords…", None, "File"),
@@ -201,17 +201,17 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("app.clearRecentLibraries", "Clear Recent Libraries", None, ""),
     // Settings ▸ Display
     ("app.displayProfile", "Display Profile", None, ""),
-    ("app.about", "About LightCraft", None, "Help"),
+    ("app.about", "About LightZ", None, "Help"),
     ("app.systemInfo", "System Info…", None, "Help"),
     ("app.openLogFolder", "Open Log Folder", None, "Help"),
     ("app.whatsNew", "What's New", None, "Help"),
     ("dialog.cull", "Assisted Culling…", None, "Photo"),
-    ("app.help", "LightCraft Help", Some("F1"), "Help"),
-    ("app.discord", "Join the ArtCraft Discord…", None, "Help"),
+    ("app.help", "LightZ Help", Some("F1"), "Help"),
+    ("app.discord", "Get help on GitHub…", None, "Help"),
     ("app.feedback", "Send Feedback…", None, "Help"),
-    ("app.website", "LightCraft Website", None, "Help"),
-    ("app.github", "LightCraft on GitHub", None, "Help"),
-    ("app.artcraft", "ArtCraft Website", None, "Help"),
+    ("app.website", "LightZ Website", None, "Help"),
+    ("app.github", "LightZ on GitHub", None, "Help"),
+    ("app.artcraft", "Upstream project", None, "Help"),
     ("app.shortcuts", "Keyboard Shortcuts", Some("Cmd+/"), "Help"),
     ("app.setShortcut", "Set Keyboard Shortcut", None, ""),
     ("app.resetShortcuts", "Reset All Keyboard Shortcuts", None, ""),
@@ -224,7 +224,7 @@ pub const UI_COMMANDS: &[UiCommand] = &[
     ("app.exportPrevious", "Export with Previous", Some("Cmd+Alt+Shift+E"), "File"),
 ];
 
-fn panel(app: &mut LightcraftApp, ctx: &egui::Context, p: RightPanel, name: &str) {
+fn panel(app: &mut LightzApp, ctx: &egui::Context, p: RightPanel, name: &str) {
     if app.ui.right == p && crate::docking::exposed(app, crate::docking::Panel::Tools) {
         app.ui.right = RightPanel::None;
         app.toast(ctx, crate::i18n::tr_format!("{name} Off", name = crate::i18n::tr(name)));
@@ -243,7 +243,7 @@ fn panel(app: &mut LightcraftApp, ctx: &egui::Context, p: RightPanel, name: &str
 
 /// `[` / `]` (size ×`k`) and ⇧`[` / ⇧`]` (feather +`df`) for the brush in use: the Remove tool's
 /// (and its selected spot's) or the Masking brush's.
-fn adjust_brush(app: &mut LightcraftApp, k: f32, df: f32) -> Value {
+fn adjust_brush(app: &mut LightzApp, k: f32, df: f32) -> Value {
     if app.ui.right == RightPanel::Remove {
         app.ui.remove_size = (app.ui.remove_size * k).clamp(0.001, 0.25);
         app.ui.remove_feather = (app.ui.remove_feather + df).clamp(0.0, 100.0);
@@ -273,7 +273,7 @@ fn parent_param(p: &Value) -> Option<u64> {
 /// `file.addPhotos` / `file.addFolder` / `file.addFromDevice` `{album?}`: the review of the scan
 /// just started opens with that album chosen (an album's context menu ▸ Import ▸ …). An error
 /// means another scan is running.
-fn import_into_album(app: &mut LightcraftApp, p: &Value, r: Result<Value, String>) -> Result<Value, String> {
+fn import_into_album(app: &mut LightzApp, p: &Value, r: Result<Value, String>) -> Result<Value, String> {
     if r.is_ok()
         && let Some(t) = &mut app.scan
     {
@@ -319,14 +319,14 @@ fn bool_param(command: &str, p: &Value, key: &str) -> Result<Option<bool>, Strin
     }
 }
 
-fn appearance_json(app: &LightcraftApp) -> Value {
+fn appearance_json(app: &LightzApp) -> Value {
     let s = &app.ui.settings;
     json!({"mode": s.appearance_mode, "darkTheme": s.dark_theme, "lightTheme": s.light_theme})
 }
 
 /// `view.appearance {mode?}`: set Appearance Mode, or step to the next one (Auto, Light, Dark).
-/// The theme follows on the next frame ([`LightcraftApp::sync_theme`]).
-fn appearance_command(app: &mut LightcraftApp, p: &Value) -> Result<Value, String> {
+/// The theme follows on the next frame ([`LightzApp::sync_theme`]).
+fn appearance_command(app: &mut LightzApp, p: &Value) -> Result<Value, String> {
     use crate::state::AppearanceMode;
     let mode = match p.get("mode") {
         None | Some(Value::Null) => app.ui.settings.appearance_mode.next(),
@@ -342,7 +342,7 @@ fn appearance_command(app: &mut LightcraftApp, p: &Value) -> Result<Value, Strin
 }
 
 /// `view.theme {theme}`: pick a theme; the mode becomes its family's (Dark or Light).
-fn theme_command(app: &mut LightcraftApp, p: &Value) -> Result<Value, String> {
+fn theme_command(app: &mut LightzApp, p: &Value) -> Result<Value, String> {
     let ids = crate::theme::ThemeKind::ALL.map(|k| k.id()).join("|");
     let Some(id) = p.get("theme").and_then(Value::as_str) else {
         return Err(format!("view.theme: `theme` is required ({ids})"));
@@ -355,7 +355,7 @@ fn theme_command(app: &mut LightcraftApp, p: &Value) -> Result<Value, String> {
 }
 
 /// Handle UI commands; `None` means "not a UI command — send it to the engine".
-pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
+pub fn run_ui_command(app: &mut LightzApp, id: &str, p: &Value) -> Option<Result<Value, String>> {
     if matches!(id, "ui.dock" | "ui.dock.reset") {
         return Some(crate::docking::command(app, id == "ui.dock.reset", p));
     }
@@ -519,7 +519,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             let reference = app
                 .ui
                 .reference
-                .filter(|r| app.session.catalog.photo(lightcraft_catalog::PhotoId(*r)).is_some())
+                .filter(|r| app.session.catalog.photo(lightz_catalog::PhotoId(*r)).is_some())
                 .or_else(|| app.session.active().map(|a| a.0));
             let Some(r) = reference else { return Some(Err("select a photo to use as the reference".into())) };
             app.ui.reference = Some(r);
@@ -540,7 +540,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         "compare.swap" => crate::panels::compare::swap(app),
         "compare.set" => {
             let Some(id) = p.get("id").and_then(Value::as_u64) else { return Some(Err("compare.set needs `id`".into())) };
-            crate::panels::compare::set_photo(app, lightcraft_catalog::PhotoId(id), p.get("side").and_then(Value::as_str))
+            crate::panels::compare::set_photo(app, lightz_catalog::PhotoId(id), p.get("side").and_then(Value::as_str))
         }
         "compare.makeSelect" => crate::panels::compare::make_select(app),
         "view.autoAdvance" => {
@@ -776,7 +776,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             // destWarning?, displayWarning?}; no params toggles
             let has = |k: &str| p.get(k).is_some();
             if let Some(s) = p.get("space").and_then(Value::as_str) {
-                match lightcraft_engine::pipeline::OutputSpace::parse(s) {
+                match lightz_engine::pipeline::OutputSpace::parse(s) {
                     Some(sp) => {
                         app.ui.proof.space = sp;
                         // a standard space replaces a device profile (unless one is given too)
@@ -786,7 +786,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 }
             }
             if let Some(i) = p.get("intent") {
-                match i.as_str().and_then(lightcraft_engine::proof::ProofIntent::parse) {
+                match i.as_str().and_then(lightz_engine::proof::ProofIntent::parse) {
                     Some(i) => app.ui.proof_intent = i,
                     None => return Some(Err("view.softProof: intent must be perceptual or relative".into())),
                 }
@@ -804,7 +804,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 None => app.ui.proof_profile.as_ref().map(|(f, _)| f.clone()),
             };
             match path {
-                Some(path) => match lightcraft_engine::proof::load(&path, app.ui.proof_intent, app.ui.proof_paper_ink) {
+                Some(path) => match lightz_engine::proof::load(&path, app.ui.proof_intent, app.ui.proof_paper_ink) {
                     Ok(pp) => {
                         app.ui.proof.profile = pp.id;
                         app.ui.proof_profile = Some((path, pp.name));
@@ -845,7 +845,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             Ok(json!({"maskOverlayAll": app.ui.mask_overlay_all}))
         }
         "view.maskOverlayMode" => {
-            use lightcraft_engine::pipeline::MaskView;
+            use lightz_engine::pipeline::MaskView;
             let cur = MaskView::parse(&app.ui.mask_overlay_mode).unwrap_or_default();
             let next = match p.get("mode").and_then(Value::as_str) {
                 Some(m) => match MaskView::parse(m) {
@@ -1053,7 +1053,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                         .session
                         .active()
                         .and_then(|id| app.session.develop_of(id))
-                        .is_some_and(|d| d.geometry.upright == lightcraft_develop::Upright::Guided);
+                        .is_some_and(|d| d.geometry.upright == lightz_develop::Upright::Guided);
                     if !guided && let Err(e) = app.run("geometry.upright", json!({"mode": "guided"})) {
                         return Some(Err(e));
                     }
@@ -1130,7 +1130,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             let album = p
                 .get("id")
                 .and_then(Value::as_u64)
-                .and_then(|id| app.session.catalog.album(lightcraft_catalog::AlbumId(id)).filter(|a| a.is_smart()).cloned());
+                .and_then(|id| app.session.catalog.album(lightz_catalog::AlbumId(id)).filter(|a| a.is_smart()).cloned());
             app.ui.dialog = Some(match album {
                 Some(a) => Dialog::SmartRules {
                     id: Some(a.id.0),
@@ -1150,7 +1150,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 None => Dialog::SmartRules {
                     id: None,
                     name: p.get("name").and_then(Value::as_str).unwrap_or("").into(),
-                    rules: lightcraft_catalog::RuleSet { rules: vec![crate::panels::rules_editor::new_rule()], ..Default::default() },
+                    rules: lightz_catalog::RuleSet { rules: vec![crate::panels::rules_editor::new_rule()], ..Default::default() },
                     parent: parent_param(p),
                 },
             });
@@ -1169,7 +1169,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         }
         "dialog.labelNames" => {
             let names =
-                lightcraft_catalog::ColorLabel::ALL.iter().map(|l| app.session.catalog.custom_label_name(*l).unwrap_or("").to_string()).collect();
+                lightz_catalog::ColorLabel::ALL.iter().map(|l| app.session.catalog.custom_label_name(*l).unwrap_or("").to_string()).collect();
             app.ui.dialog = Some(Dialog::LabelNames { names, save_as: String::new() });
             Ok(Value::Null)
         }
@@ -1200,7 +1200,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             Ok(Value::Null)
         }
         "dialog.contactSheet" => {
-            app.ui.dialog = Some(Dialog::ContactSheet { options: lightcraft_engine::contact_sheet::Options::default() });
+            app.ui.dialog = Some(Dialog::ContactSheet { options: lightz_engine::contact_sheet::Options::default() });
             Ok(Value::Null)
         }
         "app.contactSheet" => {
@@ -1224,9 +1224,9 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             let prev = app.session.last_export.clone().unwrap_or_default();
             let u = |k: &str, d: u64| prev.get(k).and_then(Value::as_u64).unwrap_or(d);
             let dir = prev.get("dir").and_then(Value::as_str).map(str::to_string).unwrap_or_else(crate::control::default_export_dir);
-            let opts = lightcraft_engine::export::ExportOptions::from_json(&prev);
+            let opts = lightz_engine::export::ExportOptions::from_json(&prev);
             // no previous export: 2048 px long edge; a previous full-size export: full size
-            let full_size = opts.resize.is_none() && lightcraft_engine::export::ExportOptions::has_size_param(&prev);
+            let full_size = opts.resize.is_none() && lightz_engine::export::ExportOptions::has_size_param(&prev);
             let resize = opts.resize.unwrap_or_default();
             app.ui.dialog = Some(Dialog::Export { opts, full_size, resize, preset_name: String::new(), limit_kb: u("limitKb", 0) as u32, dir });
             Ok(Value::Null)
@@ -1264,7 +1264,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
         }
         "app.systemInfo" => {
             let info = app.session.execute("library.info", &json!({})).unwrap_or_default();
-            let gpu = (lightcraft_engine::gpu::ready() && lightcraft_engine::gpu::available()).then(lightcraft_engine::gpu::adapter_name).flatten();
+            let gpu = (lightz_engine::gpu::ready() && lightz_engine::gpu::available()).then(lightz_engine::gpu::adapter_name).flatten();
             let mb = |b: u64| format!("{:.0} MB", b as f64 / (1u64 << 20) as f64);
             let mut rows = vec![
                 ("Version".to_string(), env!("CARGO_PKG_VERSION").to_string()),
@@ -1272,13 +1272,13 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 ("CPU threads".to_string(), std::thread::available_parallelism().map(|n| n.get().to_string()).unwrap_or_else(|_| "?".into())),
                 (
                     "GPU".to_string(),
-                    gpu.unwrap_or_else(|| match lightcraft_engine::gpu::unavailable_reason() {
+                    gpu.unwrap_or_else(|| match lightz_engine::gpu::unavailable_reason() {
                         Some(why) => crate::i18n::tr_format!("none (CPU rendering): {why}", why = why),
                         None => "none (CPU rendering)".into(),
                     }),
                 ),
                 ("GPU rendering".to_string(), if app.ui.settings.gpu { "on".into() } else { "off".into() }),
-                ("Memory budget".to_string(), mb(lightcraft_engine::memory::default_budget() as u64)),
+                ("Memory budget".to_string(), mb(lightz_engine::memory::default_budget() as u64)),
                 (
                     "Preview size".to_string(),
                     match app.ui.settings.preview_limit {
@@ -1298,7 +1298,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 format!("{:.1} ms (logic {:.1} ms; slowest {:.0} ms)", app.perf.update_ms, app.perf.logic_ms, app.perf.max_update_ms),
             ));
             rows.push(("Last loupe render".into(), format!("{:.0} ms", app.renderer.last_main_ms)));
-            if let Some(f) = lightcraft_engine::gpu::last_fallback() {
+            if let Some(f) = lightz_engine::gpu::last_fallback() {
                 rows.push(("Last GPU fallback".into(), f));
             }
             let r = json!(rows.iter().map(|(k, v)| json!({"label": k, "value": v})).collect::<Vec<_>>());
@@ -1331,7 +1331,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             let paths = match p.get("paths").and_then(Value::as_array) {
                 Some(a) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
                 None => {
-                    let req = PickRequest::files(None, crate::i18n::tr("Photos"), lightcraft_engine::import::EXTENSIONS);
+                    let req = PickRequest::files(None, crate::i18n::tr("Photos"), lightz_engine::import::EXTENSIONS);
                     match crate::pick::ask(app, id, p, "paths", req, |s| s.pick_files.as_mut().map(|f| f())) {
                         Picked::Now(paths) => paths,
                         Picked::Later | Picked::Unavailable => return Some(Ok(Value::Null)),
@@ -1395,12 +1395,12 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             if app.tasks.is_running(LABEL) {
                 return Some(Err("Find Missing Photos is already searching".into()));
             }
-            let mut candidates = lightcraft_engine::cmd::missing::find_candidates(&app.session.catalog);
+            let mut candidates = lightz_engine::cmd::missing::find_candidates(&app.session.catalog);
             if let Some(within) = within {
-                candidates.retain(|candidate| lightcraft_catalog::query::folder_within(&candidate.path, &within));
+                candidates.retain(|candidate| lightz_catalog::query::folder_within(&candidate.path, &within));
             }
-            let work = move || lightcraft_engine::cmd::missing::plan_find_missing(&candidates, &folder);
-            let done = |app: &mut LightcraftApp, ctx: &egui::Context, plan: Result<lightcraft_engine::cmd::missing::FindPlan, String>| {
+            let work = move || lightz_engine::cmd::missing::plan_find_missing(&candidates, &folder);
+            let done = |app: &mut LightzApp, ctx: &egui::Context, plan: Result<lightz_engine::cmd::missing::FindPlan, String>| {
                 // relinked under the session as it is now: photos relinked meanwhile and files
                 // now in use are skipped
                 let r = plan.and_then(|plan| app.run("library.findMissing", plan.to_json()));
@@ -1494,7 +1494,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
                 Some(x) => Some(x.to_string()),
                 None => {
                     let req =
-                        PickRequest::file(crate::i18n::tr("Locate Missing File…"), crate::i18n::tr("Photos"), lightcraft_engine::import::EXTENSIONS);
+                        PickRequest::file(crate::i18n::tr("Locate Missing File…"), crate::i18n::tr("Photos"), lightz_engine::import::EXTENSIONS);
                     match crate::pick::ask(app, "photo.locate", p, "path", req, |s| s.pick_files.as_mut().map(|f| f())) {
                         Picked::Now(v) => v.into_iter().next(),
                         Picked::Later | Picked::Unavailable => None,
@@ -1510,7 +1510,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             // a camera / card: review its DCIM folder, copying into the library by default
             let path = match p.get("path").and_then(Value::as_str) {
                 Some(x) => x.to_string(),
-                None => match lightcraft_engine::devices::devices_now().into_iter().next() {
+                None => match lightz_engine::devices::devices_now().into_iter().next() {
                     Some(d) => d.path,
                     None => return Some(Err("no camera or memory card found".into())),
                 },
@@ -1745,8 +1745,8 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             let path = match p.get("path").and_then(Value::as_str) {
                 Some(x) => Some(x.to_string()),
                 None => {
-                    let name = format!("{}.lcpreset", group.as_deref().unwrap_or("LightCraft Presets"));
-                    let req = PickRequest::save(crate::i18n::tr("Export Presets"), crate::i18n::tr("LightCraft Preset"), &["lcpreset"], name.clone());
+                    let name = format!("{}.lcpreset", group.as_deref().unwrap_or("LightZ Presets"));
+                    let req = PickRequest::save(crate::i18n::tr("Export Presets"), crate::i18n::tr("LightZ Preset"), &["lcpreset"], name.clone());
                     match crate::pick::ask(app, id, p, "path", req, |s| s.save_preset_file.as_mut().map(|f| f(&name).into_iter().collect())) {
                         Picked::Now(v) => v.into_iter().next(),
                         Picked::Later => return Some(Ok(Value::Null)),
@@ -1837,7 +1837,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
             crate::links::open(app, url)
         }
         "app.exportPrevious" => match app.session.last_export.clone() {
-            Some(prev) => crate::control::export_active(app, &lightcraft_engine::export::ExportOptions::known_keys_only(&prev)),
+            Some(prev) => crate::control::export_active(app, &lightz_engine::export::ExportOptions::known_keys_only(&prev)),
             None => Err("nothing exported yet — use Export…".into()),
         },
         _ => return None,
@@ -1845,7 +1845,7 @@ pub fn run_ui_command(app: &mut LightcraftApp, id: &str, p: &Value) -> Option<Re
     Some(r)
 }
 
-pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
+pub fn ui_enabled(app: &LightzApp, id: &str) -> bool {
     match id {
         "dialog.contactSheet" | "app.contactSheet" => !cfg!(target_arch = "wasm32") && app.session.active().is_some() && app.export.is_none(),
         s if s.starts_with("panel.") || s.starts_with("tool.") || s.starts_with("section.") => app.session.active().is_some() || s == "panel.close",
@@ -1862,7 +1862,7 @@ pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
                     .session
                     .active()
                     .and_then(|id| app.session.catalog.photo(id))
-                    .is_some_and(|p| matches!(p.source, lightcraft_engine::catalog::Source::File { .. }))
+                    .is_some_and(|p| matches!(p.source, lightz_engine::catalog::Source::File { .. }))
         }
         "app.showInFinder" => {
             app.services.reveal.is_some()
@@ -1870,7 +1870,7 @@ pub fn ui_enabled(app: &LightcraftApp, id: &str) -> bool {
                     .session
                     .active()
                     .and_then(|id| app.session.catalog.photo(id))
-                    .is_some_and(|p| matches!(p.source, lightcraft_engine::catalog::Source::File { .. }))
+                    .is_some_and(|p| matches!(p.source, lightz_engine::catalog::Source::File { .. }))
         }
         "file.exportPresets" => app.session.presets.iter().any(|p| !p.builtin),
         "file.exportCurvePresets" => !app.session.curve_presets.is_empty(),
@@ -1899,7 +1899,7 @@ pub struct MenuEntry {
 }
 
 /// The flattened menu model (UI commands + engine commands with menu paths).
-pub fn menu_entries(app: &LightcraftApp) -> Vec<MenuEntry> {
+pub fn menu_entries(app: &LightzApp) -> Vec<MenuEntry> {
     let mut v: Vec<MenuEntry> = ui_commands()
         .filter(|c| !c.3.is_empty())
         .map(|(id, label, sc, m)| MenuEntry {
@@ -1926,7 +1926,7 @@ pub fn menu_entries(app: &LightcraftApp) -> Vec<MenuEntry> {
 
 /// With Settings → General → "Confirm before deleting" on, open the confirmation dialog instead
 /// of deleting; true when it did (the dialog's OK runs `photo.delete`).
-pub fn confirm_delete(app: &mut LightcraftApp) -> bool {
+pub fn confirm_delete(app: &mut LightzApp) -> bool {
     if !app.ui.settings.confirm_delete {
         return false;
     }
@@ -1951,7 +1951,7 @@ pub fn reveal_label() -> &'static str {
 
 /// Help ▸ Open Log Folder: reveal the host's log file in the system file manager, so it can be
 /// attached to a report without hunting for the settings folder (#260).
-fn open_log_folder(app: &mut LightcraftApp) -> Result<Value, String> {
+fn open_log_folder(app: &mut LightzApp) -> Result<Value, String> {
     let path = app.services.log_file.clone().ok_or("this session keeps no log file")?;
     let reveal = app.services.reveal.as_mut().ok_or("not available here")?;
     reveal(&path)?;
@@ -1959,10 +1959,10 @@ fn open_log_folder(app: &mut LightcraftApp) -> Result<Value, String> {
 }
 
 /// Reveal the active photo's original in the system file manager.
-fn show_in_finder(app: &mut LightcraftApp) -> Result<Value, String> {
+fn show_in_finder(app: &mut LightzApp) -> Result<Value, String> {
     let id = app.session.active().ok_or("no photo selected")?;
     let path = match app.session.catalog.photo(id).map(|p| p.source.clone()) {
-        Some(lightcraft_engine::catalog::Source::File { path }) => path,
+        Some(lightz_engine::catalog::Source::File { path }) => path,
         _ => return Err("this photo has no file (demo scene)".into()),
     };
     let reveal = app.services.reveal.as_mut().ok_or("not available here")?;
@@ -1972,9 +1972,9 @@ fn show_in_finder(app: &mut LightcraftApp) -> Result<Value, String> {
 
 /// Photo ▸ Edit In: render a copy of each selected photo with its edits (stacked on its original)
 /// as Settings ▸ External Editing asks for that editor, then open them there. `p` may override the
-/// file (`format`, `colorSpace`, `bitDepth`) and the editor (`app`). PhotoCraft is checked first,
+/// file (`format`, `colorSpace`, `bitDepth`) and the editor (`app`). PhotoZ is checked first,
 /// so a missing editor leaves no copy behind.
-fn edit_in(app: &mut LightcraftApp, ctx: &egui::Context, p: &Value, photocraft: bool) -> Result<Value, String> {
+fn edit_in(app: &mut LightzApp, ctx: &egui::Context, p: &Value, photocraft: bool) -> Result<Value, String> {
     let settings = &app.ui.settings;
     let (file, configured) = if photocraft {
         let path = settings.photocraft_path.trim();
@@ -2029,7 +2029,7 @@ const MAX_ORIGINALS: usize = 50;
 /// set in Settings ▸ External Editing, e.g. a raw developer. `p` may give `ids` and the editor
 /// (`app`). Demo photos and missing files are skipped and listed; when no photo has a file to
 /// open, it fails saying why.
-fn open_original_in(app: &mut LightcraftApp, ctx: &egui::Context, p: &Value) -> Result<Value, String> {
+fn open_original_in(app: &mut LightzApp, ctx: &egui::Context, p: &Value) -> Result<Value, String> {
     let r = open_originals(app, p);
     if let Err(e) = &r {
         app.toast(ctx, e.clone());
@@ -2047,7 +2047,7 @@ fn open_original_in(app: &mut LightcraftApp, ctx: &egui::Context, p: &Value) -> 
     Ok(r)
 }
 
-fn open_originals(app: &mut LightcraftApp, p: &Value) -> Result<Value, String> {
+fn open_originals(app: &mut LightzApp, p: &Value) -> Result<Value, String> {
     let mut ids = app.session.targets(p);
     ids.dedup();
     if ids.is_empty() {
@@ -2060,8 +2060,8 @@ fn open_originals(app: &mut LightcraftApp, p: &Value) -> Result<Value, String> {
     let mut skipped = Vec::new();
     for id in ids {
         match app.session.catalog.photo(id).map(|ph| &ph.source) {
-            Some(lightcraft_engine::catalog::Source::File { path }) if std::path::Path::new(path).is_file() => files.push((id, path.clone())),
-            Some(lightcraft_engine::catalog::Source::File { path }) => {
+            Some(lightz_engine::catalog::Source::File { path }) if std::path::Path::new(path).is_file() => files.push((id, path.clone())),
+            Some(lightz_engine::catalog::Source::File { path }) => {
                 skipped.push(json!({"id": id.0, "reason": format!("the original is missing: {path}")}))
             }
             Some(_) => skipped.push(json!({"id": id.0, "reason": "a demo photo has no original file"})),

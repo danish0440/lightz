@@ -6,13 +6,13 @@ use std::time::Duration;
 use serde_json::json;
 
 use crate::headless::Headless;
-use crate::{LightcraftApp, Services};
+use crate::{LightzApp, Services};
 
 const T: Duration = Duration::from_secs(20);
 const SETTLE: Duration = Duration::from_secs(120);
 
 fn crop_tool() -> Headless {
-    let app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), Services { png: None, ..Default::default() });
+    let app = LightzApp::new(lightz_engine::Session::with_demo(), Services { png: None, ..Default::default() });
     let mut h = Headless::new(app, [1200.0, 800.0], 1.0);
     for (method, params) in [("ui.set", json!({"view": "detail"})), ("engine.execute", json!({"command": "panel.crop"}))] {
         let r = h.request(method, params, T);
@@ -39,7 +39,7 @@ fn crop_fits(h: &Headless) -> bool {
     let (w, h) = (p.width as f64, p.height as f64);
     let (w, h) = if p.develop.orientation.swaps_axes() { (h, w) } else { (w, h) };
     let g = p.develop.crop.geometry;
-    g.rect != lightcraft_geom::Rect::UNIT && g.is_within_image(w, h)
+    g.rect != lightz_geom::Rect::UNIT && g.is_within_image(w, h)
 }
 
 fn hover(h: &mut Headless, p: egui::Pos2) {

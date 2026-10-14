@@ -1,11 +1,11 @@
 //! Parameter blocks: the per-pixel stage's [`FinishParams`] packed into the 32-bit words the
 //! `finish` kernel reads (`F_*` constants, generated from [`FIELDS`]), plus its auxiliary tables.
 
-use lightcraft_develop::VignetteStyle;
-use lightcraft_pipeline::colorops::POINT_WORDS;
-use lightcraft_pipeline::finish::{FinishParams, MASK_TERMS, srgb_lut};
+use lightz_develop::VignetteStyle;
+use lightz_pipeline::colorops::POINT_WORDS;
+use lightz_pipeline::finish::{FinishParams, MASK_TERMS, srgb_lut};
 
-/// Entries per tone-curve table (`lightcraft_pipeline::finish` builds them at this size).
+/// Entries per tone-curve table (`lightz_pipeline::finish` builds them at this size).
 pub const CURVE_N: u32 = 1024;
 
 /// Field name and number of 32-bit words.
@@ -203,7 +203,7 @@ pub fn finish_block(fp: &FinishParams, masks: &[[f32; MASK_TERMS]], present: &Pr
         p.f("BALANCE", *balance);
     }
     p.f("SKIN", ops.skin);
-    p.fs("BANDH", lightcraft_pipeline::colorops::band_hues());
+    p.fs("BANDH", lightz_pipeline::colorops::band_hues());
 
     if let Some(v) = &fp.vig {
         p.b("VIG", true);

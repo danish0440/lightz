@@ -61,3 +61,17 @@ downloads cities15000.zip, admin1CodesASCII.txt and countryInfo.txt from GeoName
 (https://download.geonames.org/export/dump/) into the settings folder. GeoNames data is licensed
 under Creative Commons Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/);
 attribution: "GeoNames, geonames.org". The lookup code (crates/geocode) is our own.
+
+
+----------------------------------------------------------------------------------------
+LightZ (github.com/danish0440/lightz)
+
+Based on LightCraft by Storytold (ArtCraft), Apache-2.0. Changes by PINTAZ TECHNOLOGIES.
+
+LightZ is a modified version of LightCraft (https://github.com/storytold/lightcraft). Changes made by
+PINTAZ TECHNOLOGIES (Malaysia), applied by .pintaz/rebrand.py on top of each upstream version:
+  - renamed to LightZ (binaries, installers, bundle ids com.pintaz.*, data folders);
+  - the ArtCraft name, wordmark and marks removed (docs/brand/LICENSE-brand.txt), new Z icons;
+  - help/website links point to this fork; the About screen states the credit above;
+  - our own release and upstream-sync workflows (.github/workflows/*-z.yml).
+The licence files (LICENSE-MIT, LICENSE-APACHE) and all upstream copyright notices are unchanged.

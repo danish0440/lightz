@@ -6,13 +6,13 @@ use std::time::Duration;
 use serde_json::json;
 
 use crate::headless::Headless;
-use crate::{LightcraftApp, Services};
+use crate::{LightzApp, Services};
 
 const T: Duration = Duration::from_secs(20);
 
 fn demo(size: [f32; 2]) -> Headless {
     let services = Services { png: None, write_shared: Some(std::sync::Arc::new(|_: &str, _: &[u8]| Ok(()))), ..Default::default() };
-    let app = LightcraftApp::new(lightcraft_engine::Session::with_demo(), services);
+    let app = LightzApp::new(lightz_engine::Session::with_demo(), services);
     let mut h = Headless::new(app, size, 1.0);
     // let the first renders finish (a render still running at exit can crash in GPU teardown)
     h.settle(T);
@@ -51,7 +51,7 @@ fn export_dialog(size: [f32; 2]) -> Headless {
     open(&mut h, "dialog.export");
     if let Some(crate::state::Dialog::Export { full_size, resize, dir, .. }) = &mut h.app.ui.dialog {
         *full_size = false;
-        *resize = lightcraft_engine::export::Resize::long_edge(64);
+        *resize = lightz_engine::export::Resize::long_edge(64);
         *dir = "/lc-test-out".into();
     }
     h.settle(T);
