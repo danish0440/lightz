@@ -1,0 +1,4 @@
+crates/ui-egui/src/icons.rs: /// Community chat (opens the ArtCraft Discord): a speech bubble with three dots. Our own
+crates/ui-egui/src/links.rs: /// The app's id in ArtCraft URLs.
+crates/ui-egui/src/panels/dialogs.rs: // PINTAZ-ABOUT: required credit (Apache-2.0 change notice; ArtCraft brand licence)
+crates/ui-egui/src/panels/dialogs.rs: ui.label("Based on LightCraft by Storytold (ArtCraft), Apache-2.0. Changes by PINTAZ TECHNOLOGIES.");
