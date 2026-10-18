@@ -5,6 +5,7 @@
 #   $DIST/lightz-cli-<version>-macos-<arch>.zip      the headless CLI
 #
 # Usage: packaging/macos/package.sh [--arch universal|aarch64|x86_64] [--skip-build]
+# Fonts: use CRAFT_FONTS_DIR or ../craft-fonts; download the pinned checkout if absent.
 #
 # Signing (env):
 #   MACOS_SIGN_IDENTITY   codesign identity (name or SHA-1). Default "-" = ad-hoc (local testing;
@@ -56,6 +57,9 @@ echo "==> LightZ $VERSION for macOS ($ARCH), identity: $IDENTITY, notarize: $NOT
 
 # ---- build -------------------------------------------------------------------------------------
 if [ "$SKIP_BUILD" = 0 ]; then
+  # shellcheck source=../fonts.sh
+  . "$ROOT/packaging/fonts.sh"
+  prepare_fonts
   args=()
   for t in "${TARGETS[@]}"; do args+=(--target "$t"); done
   (cd "$ROOT" && cargo build --release --locked -p lightz -p lightz-cli --features lightz/heif,lightz-cli/heif "${args[@]}")

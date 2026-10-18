@@ -14,6 +14,7 @@ lightz-geom = { workspace = true }
 lightz-color = { workspace = true }
 lightz-raster = { workspace = true }
 lightz-develop = { workspace = true }
+lightz-faces = { workspace = true }
 lightz-pipeline = { workspace = true }
 log = { workspace = true }
 
@@ -29,5 +30,7 @@ default = []
 denoise = ["dep:lightz-denoise", "lightz-denoise/runtime"]
 
 [dev-dependencies]
+# tests record why they skip (`cargo xtask ci` lists the skips)
+lightz-testkit = { workspace = true }
 lightz-scenes = { workspace = true }
 lightz-raw = { workspace = true }

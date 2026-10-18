@@ -1,0 +1,14 @@
+[package]
+name = "lightz-slideshow"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "LightZ slideshow slides: layout, options and backdrop settings and the CPU slide composer (L1)"
+
+[lints]
+workspace = true
+
+[dependencies]
+lightz-raster = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

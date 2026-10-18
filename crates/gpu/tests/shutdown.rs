@@ -21,7 +21,8 @@ fn nothing_renders_on_the_gpu_once_the_process_is_ending() {
     let req = RenderRequest::fit(w, h);
     let has_gpu = lightz_gpu::available();
     if !has_gpu {
-        eprintln!("no GPU adapter ({:?}): only the CPU side is checked", lightz_gpu::unavailable_reason());
+        let why = lightz_gpu::unavailable_reason().unwrap_or_default();
+        lightz_testkit::skip!(Gpu, "no GPU adapter ({why}), so only the CPU side is checked");
     }
     assert!(!lightz_gpu::shutting_down());
     assert!(lightz_gpu::wait_idle(Duration::ZERO), "nothing is in flight yet");
