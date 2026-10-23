@@ -225,7 +225,7 @@ fn chip_acts(app: &mut LightzApp, ui: &egui::Ui, c: &Chip, body: egui::Response,
         body.on_hover_text(format!("{full}\n{n}"))
     };
     let c = c.clone();
-    body.context_menu(|ui| menu(app, ui, &c));
+    crate::widgets::context_menu(&body, |ui| menu(app, ui, &c));
 }
 
 /// When a list is shortened, only this many chips are measured for it: more than the lines it
