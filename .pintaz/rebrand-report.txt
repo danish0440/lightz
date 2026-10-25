@@ -1,8 +1,8 @@
 rebrand lightcraft -> LightZ
-about credit inserted in: ['crates/ui-egui/src/panels/dialogs.rs (fallback, after line 1287)']
+about credit inserted in: ['crates/ui-egui/src/panels/dialogs.rs (fallback, after line 1341)']
 launcher patches: []
 lines still naming ArtCraft/getartcraft/discord (non-doc): 4
-crates/ui-egui/src/icons.rs:83: /// Community chat (opens the ArtCraft Discord): a speech bubble with three dots. Our own
+crates/ui-egui/src/icons.rs:86: /// Community chat (opens the ArtCraft Discord): a speech bubble with three dots. Our own
 crates/ui-egui/src/links.rs:3: /// The app's id in ArtCraft URLs.
-crates/ui-egui/src/panels/dialogs.rs:1288: // PINTAZ-ABOUT: required credit (Apache-2.0 change notice; ArtCraft brand licence)
-crates/ui-egui/src/panels/dialogs.rs:1290: ui.label("Based on LightCraft by Storytold (ArtCraft), Apache-2.0. Changes by PINTAZ TECHNOLOGIES.");
+crates/ui-egui/src/panels/dialogs.rs:1342: // PINTAZ-ABOUT: required credit (Apache-2.0 change notice; ArtCraft brand licence)
+crates/ui-egui/src/panels/dialogs.rs:1344: ui.label("Based on LightCraft by Storytold (ArtCraft), Apache-2.0. Changes by PINTAZ TECHNOLOGIES.");
