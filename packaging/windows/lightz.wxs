@@ -206,6 +206,9 @@
       <Component Id="LightzCli">
         <File Id="LightzCliExe" Source="$(var.BinDir)\lightz-cli.exe" KeyPath="yes" />
       </Component>
+      <Component Id="LightzNotice">
+        <File Id="LightzNoticeFile" Source="$(var.BinDir)\NOTICE" KeyPath="yes" />
+      </Component>
       <Component Id="LightzFontLicences">
         <File Id="LightzFontLicencesFile" Source="$(var.BinDir)\FONT-LICENCES.txt" KeyPath="yes" />
       </Component>
