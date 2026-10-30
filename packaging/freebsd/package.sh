@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Build and package LightZ for FreeBSD:
 #
-#   $DIST/lightz-<version>-freebsd-x86_64.tar.gz   a /usr/local-style tree:
-#       lightz-<version>-freebsd-x86_64/{bin, share/applications, share/icons, share/mime,
+#   $DIST/lightz-<version>-freebsd-<arch>.tar.gz   (arch: x86_64 or aarch64) a /usr/local-style tree:
+#       lightz-<version>-freebsd-<arch>/{bin, share/applications, share/icons, share/mime,
 #       share/metainfo, share/doc/lightz}
 #
 # Install by copying the tree's contents into /usr/local:
-#   tar -xzf lightz-<version>-freebsd-x86_64.tar.gz --strip-components 1 -C /usr/local
+#   tar -xzf lightz-<version>-freebsd-<arch>.tar.gz --strip-components 1 -C /usr/local
 #
 # Usage: packaging/freebsd/package.sh [--skip-build] [--dry-run]
 #   --dry-run   stage the tree from stub binaries and list it, without building (works on any OS)
@@ -20,7 +20,7 @@ APP_ID=com.pintaz.lightz
 
 SKIP_BUILD=0
 DRY_RUN=0
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-build) SKIP_BUILD=1; shift ;;
     --dry-run) DRY_RUN=1; SKIP_BUILD=1; shift ;;
@@ -29,14 +29,23 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# A cross build (CI runs aarch64 in an x86_64 VM) takes its arch from the target, not the VM's uname.
 # FreeBSD's uname says amd64; release file names use x86_64 like the Linux and Windows ones.
-MACHINE="$(uname -m)"
-case "$MACHINE" in
-  amd64 | x86_64) ARCH=x86_64 ;;
-  arm64 | aarch64) ARCH=aarch64 ;;
-  *) echo "unsupported architecture $MACHINE" >&2; exit 2 ;;
-esac
-if [ "$DRY_RUN" = 0 ] && [ "$(uname -s)" != FreeBSD ]; then
+if [[ -n "${CARGO_BUILD_TARGET:-}" ]]; then
+  case "$CARGO_BUILD_TARGET" in
+    aarch64-unknown-freebsd) ARCH=aarch64 ;;
+    x86_64-unknown-freebsd) ARCH=x86_64 ;;
+    *) echo "unsupported FreeBSD target $CARGO_BUILD_TARGET" >&2; exit 2 ;;
+  esac
+else
+  MACHINE="$(uname -m)"
+  case "$MACHINE" in
+    amd64 | x86_64) ARCH=x86_64 ;;
+    arm64 | aarch64) ARCH=aarch64 ;;
+    *) echo "unsupported architecture $MACHINE" >&2; exit 2 ;;
+  esac
+fi
+if [[ "$DRY_RUN" = 0 ]] && [[ "$(uname -s)" != FreeBSD ]]; then
   echo "error: build on FreeBSD (or pass --dry-run to check the tree layout)" >&2
   exit 2
 fi
@@ -46,17 +55,18 @@ echo "==> LightZ $VERSION for FreeBSD $ARCH"
 
 # The release VM has 12 GB; full parallelism on the biggest crates runs it out of memory.
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-4}"
-if [ "$SKIP_BUILD" = 0 ]; then
-  (cd "$ROOT" && cargo build --release --locked -p lightz -p lightz-cli --features lightz/heif,lightz-cli/heif)
+if [[ "$SKIP_BUILD" = 0 ]]; then
+  (cd "$ROOT" && cargo build --release --locked -p lightz -p lightz-cli --features lightz/heif,lightz-cli/heif \
+    ${CARGO_BUILD_TARGET:+--target "$CARGO_BUILD_TARGET"})
 fi
 WORK="$CARGO_TARGET_DIR/freebsd-package"
 STAGE="$WORK/$BASENAME"
 rm -rf "$WORK"
 mkdir -p "$WORK"
 
-BIN="$CARGO_TARGET_DIR/release"
+BIN="$CARGO_TARGET_DIR/${CARGO_BUILD_TARGET:+$CARGO_BUILD_TARGET/}release"
 OUT_DIR="$DIST"
-if [ "$DRY_RUN" = 1 ]; then
+if [[ "$DRY_RUN" = 1 ]]; then
   # Stub binaries, and the tarball stays in the work dir so dist/ only ever holds real builds.
   BIN="$WORK/stub-bin"
   OUT_DIR="$WORK"
@@ -84,7 +94,7 @@ copy_docs "$STAGE/share/doc/lightz"
 for f in bin/lightz bin/lightz-cli "share/applications/$APP_ID.desktop" \
   "share/icons/hicolor/256x256/apps/$APP_ID.png" "share/icons/hicolor/scalable/apps/$APP_ID.svg" \
   share/doc/lightz/LICENSE-MIT share/doc/lightz/LICENSE-APACHE; do
-  if [ ! -e "$STAGE/$f" ]; then echo "error: $f is missing from the package" >&2; exit 1; fi
+  if [[ ! -e "$STAGE/$f" ]]; then echo "error: $f is missing from the package" >&2; exit 1; fi
 done
 
 # ---- .tar.gz ------------------------------------------------------------------------------------
@@ -92,8 +102,13 @@ mkdir -p "$OUT_DIR"
 tar -C "$WORK" -czf "$OUT_DIR/$BASENAME.tar.gz" "$BASENAME"
 echo "wrote $OUT_DIR/$BASENAME.tar.gz"
 
-"$STAGE/bin/lightz-cli" --version
-if [ "$DRY_RUN" = 1 ]; then
+# A cross-built binary (e.g. aarch64 on the x86_64 VM) cannot run on the build host.
+if [[ -z "${CARGO_BUILD_TARGET:-}" ]]; then
+  "$STAGE/bin/lightz-cli" --version
+else
+  echo "skipping --version: $CARGO_BUILD_TARGET binaries do not run on this host"
+fi
+if [[ "$DRY_RUN" = 1 ]]; then
   echo "==> dry run: tarball contents"
   tar -tzvf "$OUT_DIR/$BASENAME.tar.gz"
 fi
