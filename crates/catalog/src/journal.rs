@@ -6,7 +6,10 @@
 //!   rename).
 //! - `catalog.log` — JSON lines, one per op applied after the snapshot:
 //!   `{"seq":N,"crc":C,"op":{…}}` where `C` is the CRC-32 of the op's JSON text. Appends are
-//!   fsynced before [`Journal::append`] returns.
+//!   fsynced before [`Journal::append`] returns, except natively: [`crate::FsStore`] hands them to
+//!   a thread of its own that writes and syncs them in order right after (so a flag never waits
+//!   for the drive), holds and retries whatever fails ([`Journal::unwritten`]) and refuses later
+//!   appends meanwhile, so the log never has a gap and nothing handed over is dropped.
 //!
 //! Loading = snapshot + replay of the records with `seq > snapshot seq`. Recovery rules:
 //! - a **torn final record** (crash mid-append: truncated line or bad CRC at the end) is dropped
@@ -52,6 +55,8 @@
 //! | 7 | Kelvin white balance for raws whose camera has matrices (#730) | `Op::SetAsShotWb`, `WhiteBalance.scale` |
 //! | 8 | History cursor: Go to History Step adds no step | `Op::SetHistoryCursor`, `Photo.history_cursor` |
 //! | 9 | preview-only recheck | `Photo.preview_checked`, `Op::SetContent.preview_checked` |
+//! | 10 | masks stay on the photo under lens corrections, Upright and Transform | `Mask.on_photo` (develop settings) |
+//! | 11 | lens database profiles named in the Optics panel | `EmbeddedLens.source` |
 //!
 //! Rules:
 //! - **Bump [`VERSION`]** (and add a row above) in the change that adds an [`Op`] variant or a
@@ -76,7 +81,7 @@ pub const LOG: &str = "catalog.log";
 const FORMAT: &str = "lightz-catalog";
 /// The catalog format this build writes (and the newest it reads). See the module docs →
 /// *Format versions*; bump it whenever an [`Op`] variant or a serialized field is added.
-pub const VERSION: u32 = 9;
+pub const VERSION: u32 = 11;
 
 /// When [`Journal::wants_snapshot`] says it's time to compact the log.
 #[derive(Clone, Copy, Debug)]
@@ -193,6 +198,10 @@ pub struct Journal {
     /// A failed append may have left part of its records after `log_bytes`, and cutting them off
     /// failed too: the next append cuts the log back to `log_bytes` first.
     tail_dirty: bool,
+    /// An append failed (natively that can be the store's own log thread failing to write records
+    /// handed over before, which it holds and retries): the next chance writes a snapshot, a fresh
+    /// file holding everything, in case only the log's file is broken.
+    snapshot_due: bool,
 }
 
 /// A background snapshot in flight.
@@ -263,14 +272,36 @@ fn newer(what: String) -> CatalogError {
     CatalogError::Newer(format!("{what}; this version reads catalog format v{VERSION} and older"))
 }
 
+/// The most `resync` spends re-validating the suffixes of one line whose whole bytes are not valid
+/// UTF-8 (a real fragment ends at any byte): one line of a modest malformed log that holds a start
+/// of a record in every few bytes used to re-validate the whole remaining suffix at every attempt
+/// (CWE-407). Past the budget the rest of the line stays a torn tail, which the damaged path keeps
+/// and reports, same state as before, minus the CPU.
+const RESYNC_BUDGET_BYTES: usize = 64 << 20; // 64 MiB
+
 /// A line that doesn't decode but ends with a whole record: a fragment of a failed append followed
 /// by the record that retried it (the retry re-encodes the same ops with the same `seq`s). Returns
 /// the fragment's length and the record, if that record continues the log (`seq <= last + 1`).
 /// The record's CRC must match, so damage is never mistaken for it.
 fn resync(line: &[u8], last: u64) -> Option<(usize, (u64, Op))> {
     const START: &[u8] = b"{\"seq\":";
+    // One record per line, so a line of valid UTF-8 holds a valid suffix at every record start and
+    // one validation covers every candidate; only a line that is not wholly valid re-checks, and
+    // then up to the budget rather than the suffix length times the candidate count.
+    let whole = std::str::from_utf8(line).ok();
+    let mut spent = 0usize;
     (1..line.len().saturating_sub(START.len() - 1)).filter(|&i| line[i..].starts_with(START)).find_map(|i| {
-        let rec = std::str::from_utf8(&line[i..]).ok().map(|l| l.trim_end_matches('\r')).and_then(decode_record)?;
+        let text = match &whole {
+            Some(t) => &t[i..],
+            None => {
+                if spent >= RESYNC_BUDGET_BYTES {
+                    return None;
+                }
+                spent = spent.saturating_add(line.len() - i);
+                std::str::from_utf8(&line[i..]).ok()?
+            }
+        };
+        let rec = decode_record(text.trim_end_matches('\r'))?;
         (rec.0 <= last.saturating_add(1)).then_some((i, rec))
     })
 }
@@ -359,6 +390,7 @@ impl Journal {
             pending: None,
             retry_at_records: 0,
             tail_dirty: false,
+            snapshot_due: false,
         };
         let log = log.unwrap_or_default();
 
@@ -492,6 +524,7 @@ impl Journal {
             self.tail_dirty = false;
         }
         if let Err(e) = self.store.append(LOG, buf.as_bytes()) {
+            self.snapshot_due = true;
             // Part of the batch may be in the file. Cut it back to the last whole record, so the
             // retry (same seqs) starts on a clean line instead of after a fragment that would
             // read back as damage.
@@ -654,6 +687,7 @@ impl Journal {
     }
 
     fn record_snapshot(&mut self, t: SnapshotTiming) {
+        self.snapshot_due = false;
         self.stats.snapshots += 1;
         self.stats.last_snapshot = t;
         self.stats.max_snapshot_ms = self.stats.max_snapshot_ms.max(t.total_ms);
@@ -673,6 +707,23 @@ impl Journal {
         }
     }
 
+    /// Wait until every appended record is in the file and synced (natively the store writes the
+    /// log on a thread of its own, [`crate::FsStore`]): before the files are read or copied from
+    /// outside. An error says why some aren't yet: they are held and retried, never dropped.
+    pub fn flush(&mut self) -> Result<()> {
+        self.store.flush().map_err(io)
+    }
+
+    /// Appended records the store holds because writing them failed (retried), and why; `None`
+    /// when nothing is held back. Never waits for the drive.
+    pub fn unwritten(&self) -> Option<(usize, String)> {
+        // a snapshot that holds every op holds whatever the log's thread still holds
+        if self.snapshot_seq >= self.seq && self.pending.is_none() {
+            return None;
+        }
+        self.store.unwritten()
+    }
+
     /// Where persistence time went so far.
     pub fn stats(&self) -> PersistStats {
         PersistStats { snapshot_running: self.pending.is_some(), ..self.stats }
@@ -682,7 +733,10 @@ impl Journal {
     pub fn wants_snapshot(&self) -> bool {
         self.pending.is_none()
             && self.log_records >= self.retry_at_records
-            && (self.log_records >= self.policy.max_records || self.log_bytes >= self.policy.max_bytes)
+            && (self.snapshot_due
+                || self.unwritten().is_some()
+                || self.log_records >= self.policy.max_records
+                || self.log_bytes >= self.policy.max_bytes)
     }
 
     pub fn seq(&self) -> u64 {
@@ -712,5 +766,30 @@ impl Drop for Journal {
         {
             log::error!("catalog: background snapshot failed: {e}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests_resync {
+    use super::*;
+
+    /// A torn first line may end at any byte and a failed append's retried records may follow its
+    /// own start `{"seq":` more than once: `resync` finds the CRC-valid record after a fragment of
+    /// many record starts. UTF-8 is validated once for a valid line, and for a line that isn't
+    /// wholly valid only up to the budget instead of the suffix length per candidate (CWE-407).
+    #[test]
+    fn resync_finds_the_retried_record_after_a_fragment_of_many_starts() {
+        let op = Op::Batch { ops: vec![] };
+        let record = encode_record(5, &op);
+        let mut line = Vec::from(b"\xf2" as &[u8]); // an invalid byte, so the whole line is not UTF-8
+        for i in 0..1024 {
+            line.extend_from_slice(format!("{{\"seq\":{},\"crc\":{{", i).as_bytes());
+        }
+        let fragment = line.len();
+        line.extend_from_slice(record.as_bytes());
+        assert_eq!(resync(&line, 4).map(|(at, (seq, _))| (at, seq)), Some((fragment, 5)));
+        // a retry is still recognised past `last`: the fragment logs nothing valid, but the CRC
+        // matches, so the double `Some` is only reached with `last >= 4`
+        assert_eq!(resync(&line, 100).map(|(at, (seq, _))| (at, seq)), Some((fragment, 5)));
     }
 }

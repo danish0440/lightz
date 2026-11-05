@@ -129,7 +129,9 @@ impl WireJob {
     /// Identifies the decoded source this job needs.
     fn source_key(&self) -> String {
         match &self.origin {
-            Source::File { path } => format!("{}:{:?}:{}:{path}", self.cache_generation, self.source_identity, self.max_edge),
+            Source::File { path } => {
+                format!("{}:{:?}:{}:{}:{path}", self.cache_generation, self.source_identity, self.max_edge, self.settings.removes_hot_pixels())
+            }
             Source::Demo { scene } => format!("{}:{:?}:{}:demo:{scene}", self.cache_generation, self.source_identity, self.max_edge),
         }
     }
@@ -181,8 +183,10 @@ impl WorkerCore {
             None => {
                 let src = match (&job.origin, original) {
                     (Source::File { .. }, Some(bytes)) => {
-                        let (image, info) = lightz_engine::files::load_bytes(bytes, job.max_edge)?;
-                        DecodedSource::new(Arc::new(image), Some(info))
+                        let outliers = job.settings.removes_hot_pixels();
+                        let with = lightz_engine::media::RawDecode { dcp: None, outliers };
+                        let (image, info) = lightz_engine::files::load_bytes_decoded(bytes, job.max_edge, with)?;
+                        DecodedSource { outliers, ..DecodedSource::new(Arc::new(image), Some(info)) }
                     }
                     (Source::File { path }, None) => return Err(format!("{path}: original not found in browser storage")),
                     (origin @ Source::Demo { .. }, _) => self.media.origin_ref(origin, job.max_edge).load_source()?,
@@ -522,7 +526,7 @@ mod tests {
             }
         };
         frame(&mut watch, &mut index); // an empty filtered view: no render request yet
-        cache.clear(); // File ▸ Clear Preview Cache
+        cache.clear(); // File ▸ Discard Preview Cache
         frame(&mut watch, &mut index);
         // the filter is removed: the first thumbnail request (`Workers::try_start`)
         gone.extend(watch.observe(&cache, cache.generation(), &mut index));
