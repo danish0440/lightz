@@ -25,6 +25,9 @@ lightz-merge = { workspace = true }
 serde_json = { workspace = true }
 dhat = { workspace = true, optional = true }
 
+[dev-dependencies]
+lightz-testkit = { workspace = true }
+
 [features]
 default = ["denoise"]
 denoise = ["lightz-engine/denoise"]
