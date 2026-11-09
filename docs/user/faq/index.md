@@ -6,3 +6,4 @@ order: 40
 
 - [Is LightZ free, and does it need an account?](free-and-private.md)
 - [Which cameras and file types does LightZ open?](supported-files.md)
+- [Does closing the window quit LightZ?](closing-the-window.md)
