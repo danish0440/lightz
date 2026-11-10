@@ -519,11 +519,14 @@ mod tests {
     fn data(source: String) -> CatalogImport {
         CatalogImport {
             source,
+            catalog_id: None,
+            catalog_path: None,
             photos: Vec::new(),
             collections: Vec::new(),
             members: Vec::new(),
             collection_content: Vec::new(),
             warnings: Vec::new(),
+            skipped: Vec::new(),
         }
     }
 
@@ -542,11 +545,14 @@ mod tests {
         };
         CatalogImport {
             source: "source.lrcat".into(),
+            catalog_id: None,
+            catalog_path: None,
             photos: vec![photo],
             collections: vec![BTreeMap::from([("name".into(), serde_json::json!("Keepers"))])],
             members: vec![BTreeMap::from([("image".into(), serde_json::json!(7))])],
             collection_content: vec![BTreeMap::from([("rule".into(), serde_json::json!("rating > 3"))])],
             warnings: vec!["one warning".into()],
+            skipped: Vec::new(),
         }
     }
 
