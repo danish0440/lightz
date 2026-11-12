@@ -20,9 +20,9 @@
 //! - The preview is the maker note's tag `0x0280`, a JPEG whose first byte is stored as `ee` (found by the
 //!   structural scan in `preview::scan_for_jpeg`).
 use crate::{BlackLevel, Cfa, ColorData, Mode, OpcodeLists, RawData, RawError, RawFormat, RawImage, Rect, Result};
+use craft_tiff::image::chunk_bytes;
+use craft_tiff::{Ifd, Tiff, tags as t};
 use lightz_geom::Orientation;
-use lightz_tiff::image::chunk_bytes;
-use lightz_tiff::{Ifd, Tiff, tags as t};
 
 /// Epson's private compression code for the 16-byte block layout.
 const BLOCKS16: u16 = 32769;
@@ -58,8 +58,8 @@ fn maker_note(bytes: &[u8], tiff: &Tiff) -> Option<Ifd> {
     if !bytes.get(start..)?.starts_with(b"EPSON\0") {
         return None;
     }
-    let opts = lightz_tiff::ParseOptions { max_ifds: 1, max_depth: 0, follow_children: false, ..Default::default() };
-    lightz_tiff::parse_ifd_at(bytes, e.offset.checked_add(8)?, tiff.order, 0, false, &opts).ok().map(|(i, _)| i)
+    let opts = craft_tiff::ParseOptions { max_ifds: 1, max_depth: 0, follow_children: false, ..Default::default() };
+    craft_tiff::parse_ifd_at(bytes, e.offset.checked_add(8)?, tiff.order, 0, false, &opts).ok().map(|(i, _)| i)
 }
 
 /// Unpack a strip of 16-byte blocks (15 bytes of ten MSB-first 12-bit samples, one pad byte).
@@ -95,8 +95,12 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
         _ => Rect::new(0, 0, w, h),
     };
     // the white balance is measured from the samples, so the header probe reads them too
+    // the strip length is the tag value, so a short file must fail before the sample buffer is sized from it
     let chunks = info.chunks(bytes.len() as u64);
-    let src = chunks.first().and_then(|c| chunk_bytes(bytes, c)).ok_or_else(|| RawError::Corrupt("Erf strip outside file".into()))?;
+    let src = chunks
+        .first()
+        .and_then(|c| chunk_bytes(bytes, c).filter(|s| s.len() as u64 == c.len))
+        .ok_or_else(|| RawError::Corrupt("Erf strip outside file".into()))?;
     let mut d = vec![0u16; n];
     unpack(src, &mut d);
     let white = super::white_from_data(&d, 12);
@@ -133,7 +137,7 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lightz_tiff::{IfdBuilder, ImageData, TiffWriter, Value};
+    use craft_tiff::{IfdBuilder, ImageData, TiffWriter, Value};
 
     /// Pack ten-sample groups into 16-byte blocks, MSB first, zero pad.
     fn pack(px: &[u16]) -> Vec<u8> {
@@ -164,7 +168,7 @@ mod tests {
         ifd0.set(t::MODEL, Value::Ascii("R-D1".into()));
         ifd0.set(t::ORIENTATION, Value::Short(vec![1]));
         ifd0.add_sub_ifd(raw);
-        TiffWriter::new(lightz_tiff::ByteOrder::Big, false).write(&[ifd0]).unwrap()
+        TiffWriter::new(craft_tiff::ByteOrder::Big, false).write(&[ifd0]).unwrap()
     }
 
     #[test]
@@ -195,5 +199,36 @@ mod tests {
                 let _ = crate::probe_info(&g);
             }
         }
+    }
+
+    /// Rewrite the raw IFD's height, rows per strip and strip length in place (the strip data stays as written).
+    fn declare(f: &mut [u8], rows: u32, strip_len: u32) {
+        let tiff = Tiff::parse(f).unwrap();
+        let raw = &tiff.ifds[0].sub_ifds[0];
+        let spots: Vec<_> = [(t::IMAGE_LENGTH, rows), (t::ROWS_PER_STRIP, rows), (t::STRIP_BYTE_COUNTS, strip_len)]
+            .into_iter()
+            .map(|(tag, v)| {
+                let e = raw.entries.iter().find(|e| e.tag == tag).unwrap();
+                (e.offset as usize, matches!(e.value, Value::Short(_)), v)
+            })
+            .collect();
+        for (at, short, v) in spots {
+            if short {
+                f[at..at + 2].copy_from_slice(&u16::try_from(v).unwrap().to_be_bytes());
+            } else {
+                f[at..at + 4].copy_from_slice(&v.to_be_bytes());
+            }
+        }
+    }
+
+    #[test]
+    fn a_strip_longer_than_the_file_is_an_error() {
+        // #2119: the declared strip length matched the size, so a few bytes of data were decoded as a full frame
+        let px: Vec<u16> = (0..40).map(|i| (i * 13 % 4096) as u16).collect();
+        let mut f = sample(20, 2, &px);
+        declare(&mut f, 2000, 32 * 2000);
+        assert_eq!(crate::probe(&f), Some(RawFormat::Erf));
+        assert!(matches!(crate::probe_info(&f), Err(RawError::Corrupt(_))));
+        assert!(matches!(crate::decode(&f), Err(RawError::Corrupt(_))));
     }
 }

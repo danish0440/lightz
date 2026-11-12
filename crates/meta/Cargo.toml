@@ -9,11 +9,14 @@ description = "LightZ metadata: EXIF, XMP, IPTC (L1)"
 workspace = true
 
 [dependencies]
-lightz-tiff = { workspace = true }
+craft-tiff = { workspace = true }
 lightz-geom = { workspace = true }
 serde = { workspace = true }
 quick-xml = { workspace = true }
+chrono = { workspace = true }
 
 [dev-dependencies]
+# Lossless synthetic HEIC files: the HEIF item reader is proved against a real container writer.
+craft-heif = { workspace = true, features = ["testdata"] }
 proptest = { workspace = true }
 serde_json = { workspace = true }

@@ -19,9 +19,9 @@ use super::{black_from_columns, cfa_from_exif, white_from_data};
 
 use crate::tiffraw::{Packing, read_image_in};
 use crate::{BlackLevel, Cfa, ColorData, Mode, OpcodeLists, RawData, RawError, RawFormat, RawImage, Rect, Result};
+use craft_tiff::image::{ImageInfo, chunk_bytes};
+use craft_tiff::{ByteOrder, Tiff, makernote, tags as t};
 use lightz_geom::Orientation;
-use lightz_tiff::image::{ImageInfo, chunk_bytes};
-use lightz_tiff::{ByteOrder, Tiff, makernote, tags as t};
 
 const CROP_ORIGIN: u16 = 0x0038;
 const CROP_SIZE: u16 = 0x0039;
@@ -267,14 +267,14 @@ pub(crate) fn decode(bytes: &[u8], mode: Mode) -> Result<RawImage> {
             let chunks = info.chunks(bytes.len() as u64);
             let first = chunks.first().ok_or_else(|| RawError::Corrupt("PEF without image data".into()))?;
             let mut c = *first;
-            c.len = chunks.iter().map(|c| c.len).sum::<u64>().max(first.len);
+            c.len = chunks.iter().fold(0u64, |a, c| a.saturating_add(c.len)).max(first.len);
             let src = chunk_bytes(bytes, &c)
                 .or_else(|| bytes.get(first.offset as usize..))
                 .ok_or_else(|| RawError::Corrupt("PEF data outside file".into()))?;
             if read == Mode::Full { RawData::U16(decode_huffman(src, &huff, w, hgt, bits)?) } else { RawData::U16(Vec::new()) }
         }
         1 => {
-            let strip: u64 = info.chunks(bytes.len() as u64).iter().map(|c| c.len).sum();
+            let strip = info.chunks(bytes.len() as u64).iter().fold(0u64, |a, c| a.saturating_add(c.len));
             let packing = if strip >= (w * hgt * 2) as u64 { Packing::Word16 } else { Packing::Msb };
             read_image_in(read, bytes, &info, tiff.order, packing)?
         }
@@ -523,7 +523,7 @@ mod tests {
     /// `CFAPattern` `pattern` and an AOC maker note with the area tags (and, for 65535, a Huffman table). The samples
     /// are plain 16-bit words (1), packed 12-bit (32773) or Huffman coded (65535).
     fn pef_with_pattern(compression: u16, pattern: [u8; 4]) -> Vec<u8> {
-        use lightz_tiff::{IfdBuilder, ImageData, TiffWriter, Value};
+        use craft_tiff::{IfdBuilder, ImageData, TiffWriter, Value};
         let (w, h) = (16usize, 8usize);
         let px: Vec<u16> = (0..w * h).map(|i| ((i * 37) % 900 + 100) as u16).collect();
         let (tb, codes) = test_table();
@@ -589,7 +589,7 @@ mod tests {
     /// A `w x h` big-endian 14-bit PEF of plain 16-bit words without area tags, whose maker note has only a
     /// BlackPoint of `black`, with `px(x, y)` as the samples.
     fn pef_with_black_point(w: usize, h: usize, black: u16, px: impl Fn(usize, usize) -> u16) -> Vec<u8> {
-        use lightz_tiff::{IfdBuilder, ImageData, TiffWriter, Value};
+        use craft_tiff::{IfdBuilder, ImageData, TiffWriter, Value};
         let strip: Vec<u8> = (0..w * h).flat_map(|i| px(i % w, i / w).to_be_bytes()).collect();
         let build = |levels_at: u32| {
             let mut ifd = IfdBuilder::new();
@@ -706,5 +706,17 @@ mod tests {
         let (w, h) = (320, 288);
         let file = pef_with_black_point(w, h, 64, |x, y| 64 + ((x * 7 + y * 13) % 5) as u16);
         assert_eq!(decode(&file, Mode::Full).unwrap().active_area, Rect::new(0, 0, w, h));
+    }
+
+    /// Strip byte counts that add up past `u64::MAX` (LONG8 `[u64::MAX, 1]`) are an error or a picture, not an overflow,
+    /// for the Huffman-coded and the uncompressed samples.
+    #[test]
+    fn strip_byte_counts_past_u64_max_do_not_overflow() {
+        for compression in [65535u16, 1] {
+            let file = crate::vendor::tests::huge_strip_counts(pef_with_pattern(compression, [0, 1, 1, 2]));
+            for mode in [Mode::Header, Mode::Full] {
+                let _ = decode(&file, mode);
+            }
+        }
     }
 }
