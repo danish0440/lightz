@@ -23,7 +23,7 @@ use std::collections::{BTreeSet, HashSet};
 
 use quick_xml::events::Event;
 
-use crate::xmp::{XmpError, canonical_name, parse_xmp};
+use crate::xmp::{MAX_OPAQUE_NAME_BYTES, XmpError, canonical_name, check_scopes, parse_xmp, unescape_attr};
 
 /// Which properties [`merge_xmp`] takes from the fresh packet. Names are canonical
 /// `prefix:name` (prefixes as [`crate::parse_xmp`] reports them); `prefix:*` is a whole namespace.
@@ -75,6 +75,8 @@ struct Scan {
     descs: Vec<Desc>,
     /// Where the first `</rdf:RDF>` starts.
     rdf_close: Option<usize>,
+    /// The span of a self-closing `<rdf:RDF/>` (used only when there is no `</rdf:RDF>`).
+    rdf_empty: Option<(usize, usize)>,
 }
 
 enum Kind {
@@ -101,6 +103,7 @@ fn scan(s: &str) -> Result<Scan, XmpError> {
     let mut stack: Vec<Kind> = Vec::new();
     let mut scopes: Vec<Vec<(String, String)>> = vec![vec![("xml".into(), "http://www.w3.org/XML/1998/namespace".into())]];
     let mut count = 0usize;
+    let mut opaque_budget = MAX_OPAQUE_NAME_BYTES;
     loop {
         let before = pos(&reader);
         let ev = reader.read_event().map_err(|e| XmpError::Xml(e.to_string()))?;
@@ -124,18 +127,22 @@ fn scan(s: &str) -> Result<Scan, XmpError> {
                     }
                     let v = String::from_utf8_lossy(&a.value).into_owned();
                     if k == "xmlns" {
-                        scope.push((String::new(), v.clone()));
+                        scope.push((String::new(), unescape_attr(&v)));
                     } else if let Some(p) = k.strip_prefix("xmlns:") {
-                        scope.push((p.to_string(), v.clone()));
+                        scope.push((p.to_string(), unescape_attr(&v)));
                     }
                     raw_attrs.push((k, v));
                 }
                 scopes.push(scope);
+                check_scopes(&scopes)?;
                 let raw_name = String::from_utf8_lossy(e.name().as_ref()).into_owned();
-                let name = canonical_name(&raw_name, &scopes);
+                let name = canonical_name(&raw_name, &scopes, &mut opaque_budget)?;
                 let kind = match stack.last() {
                     Some(Kind::Rdf) if name == "rdf:Description" => {
-                        let attrs = raw_attrs.into_iter().map(|(raw, value)| Attr { name: canonical_name(&raw, &scopes), raw, value }).collect();
+                        let attrs = raw_attrs
+                            .into_iter()
+                            .map(|(raw, value)| Ok(Attr { name: canonical_name(&raw, &scopes, &mut opaque_budget)?, raw, value }))
+                            .collect::<Result<_, XmpError>>()?;
                         out.descs.push(Desc { tag_start: before, tag_end: after, raw_name, empty, attrs, props: Vec::new(), end: after });
                         Kind::Desc(out.descs.len() - 1)
                     }
@@ -144,6 +151,9 @@ fn scan(s: &str) -> Result<Scan, XmpError> {
                     _ => Kind::Other,
                 };
                 if empty {
+                    if matches!(kind, Kind::Rdf) {
+                        out.rdf_empty = out.rdf_empty.or(Some((before, after)));
+                    }
                     scopes.pop();
                     if let Kind::Prop { desc, start, name } = kind
                         && let Some(d) = out.descs.get_mut(desc)
@@ -209,7 +219,9 @@ pub fn merge_xmp(existing: &str, fresh: &str, rules: MergeRules) -> Result<Strin
     };
     parse_xmp(old)?;
     let ex = scan(old)?;
-    let rdf_close = ex.rdf_close.ok_or_else(|| XmpError::Xml("no rdf:RDF element".into()))?;
+    if ex.rdf_close.is_none() && ex.rdf_empty.is_none() {
+        return Err(XmpError::Xml("no rdf:RDF element".into()));
+    }
     let new = scan(fresh)?;
     let fresh_desc = new.descs.first().ok_or_else(|| XmpError::Xml("the new packet has no rdf:Description".into()))?;
     let fresh_names: BTreeSet<&str> = fresh_desc.props.iter().map(|p| p.name.as_str()).collect();
@@ -257,8 +269,16 @@ pub fn merge_xmp(existing: &str, fresh: &str, rules: MergeRules) -> Result<Strin
     }
     block.push_str("\n  </rdf:Description>");
     if written > 0 {
-        let at = old.get(..rdf_close).map_or(rdf_close, |h| h.trim_end().len());
-        edits.push((at, at, block));
+        if let Some(rdf_close) = ex.rdf_close {
+            let at = old.get(..rdf_close).map_or(rdf_close, |h| h.trim_end().len());
+            edits.push((at, at, block));
+        } else if let Some((s, e)) = ex.rdf_empty {
+            // a self-closing `<rdf:RDF .../>` is opened up around the new description
+            let tag = old.get(s..e).ok_or_else(|| XmpError::Xml("bad span".into()))?;
+            let open = tag.trim_end().strip_suffix("/>").ok_or_else(|| XmpError::Xml("bad rdf:RDF tag".into()))?;
+            let name = tag.get(1..).and_then(|t| t.split(|c: char| c.is_whitespace() || c == '/' || c == '>').next()).unwrap_or("rdf:RDF");
+            edits.push((s, e, format!("{open}>{block}\n</{name}>")));
+        }
     }
     edits.sort_by_key(|e| (e.0, e.1));
     // overlapping edits can't happen (properties sit inside their description, which is either
@@ -383,6 +403,16 @@ mod tests {
     }
 
     #[test]
+    fn a_self_closing_rdf_element_is_opened_not_replaced() {
+        let ex = "<!-- keep me --><x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><r:RDF xmlns:r=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"/></x:xmpmeta>";
+        let out = merge_xmp(ex, &fresh(3, &[]), RULES).unwrap();
+        assert!(out.starts_with("<!-- keep me --><x:xmpmeta"), "{out}");
+        assert!(out.contains("</r:RDF></x:xmpmeta>"), "{out}");
+        assert_eq!(parse_xmp(&out).unwrap().properties.get("xmp:Rating"), Some(&vec!["3".to_string()]));
+        assert!(merge_xmp("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"/>", &fresh(3, &[]), RULES).is_err(), "no RDF element at all");
+    }
+
+    #[test]
     fn owned_if_present_and_prefix_independence() {
         // the existing packet binds the namespaces to other prefixes, and has a capture time
         let ex = "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><r:RDF xmlns:r=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\
@@ -397,6 +427,47 @@ mod tests {
         let out = merge_xmp(ex, &crate::write_xmp_lc(&m, &[]), RULES).unwrap();
         let d = parse_xmp(&out).unwrap();
         assert_eq!(d.properties.get("exif:DateTimeOriginal"), Some(&vec!["2024-05-06T07:08:09".to_string()]));
+    }
+
+    #[test]
+    fn preserves_foreign_properties_using_known_prefixes() {
+        for property in [r#"lc:Secret="keep-me"/>"#, r#"><lc:Secret>keep-me</lc:Secret></rdf:Description>"#] {
+            let desc = format!(r#"<rdf:Description rdf:about="" xmlns:lc="https://example.org/vendor/" {property}"#);
+            let old = format!(r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">{desc}</rdf:RDF>"#);
+            let out = merge_xmp(&old, &fresh(4, &[]), RULES).unwrap();
+            assert!(out.contains(&desc), "lost foreign description: {out}");
+            assert_eq!(parse_xmp(&out).unwrap().metadata.rating, Some(4));
+            assert_eq!(merge_xmp(&out, &fresh(4, &[]), RULES).unwrap(), out);
+        }
+    }
+
+    #[test]
+    fn namespace_aliases_remain_distinct_during_merge() {
+        // The alias URI includes a character reference: scanning and parsing must resolve it identically.
+        let foreign = r#"<rdf:Description xmlns:xmp="https://example.org/vendor/" xmp:Rating="2"/>"#;
+        let old = format!(
+            r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">{foreign}
+            <rdf:Description xmlns:a="http://ns.adobe.com/xap/1.0&#47;" a:Rating="3"/>
+            </rdf:RDF>"#
+        );
+        let out = merge_xmp(&old, &fresh(5, &[]), RULES).unwrap();
+        assert!(out.contains(foreign), "lost foreign rating: {out}");
+        assert!(!out.contains("a:Rating="), "genuine alias must be replaced: {out}");
+        assert_eq!(parse_xmp(&out).unwrap().metadata.rating, Some(5));
+        assert_eq!(merge_xmp(&out, &fresh(5, &[]), RULES).unwrap(), out);
+    }
+
+    #[test]
+    fn opaque_namespace_expansion_is_bounded() {
+        // A roughly 40 KiB packet must not expand the same long URI into every property name indefinitely.
+        let packet = format!(
+            r#"<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description
+                xmlns:lc="https://example.org/{}">{}</rdf:Description></rdf:RDF>"#,
+            "a".repeat(1024),
+            "<lc:p/>".repeat(5000)
+        );
+        assert_eq!(parse_xmp(&packet).unwrap_err(), XmpError::TooComplex);
+        assert!(matches!(scan(&packet), Err(XmpError::TooComplex)));
     }
 
     #[test]

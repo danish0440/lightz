@@ -9,12 +9,14 @@ description = "LightZ RAW decoding, demosaicing and DNG colour model (L1)"
 workspace = true
 
 [dependencies]
-lightz-tiff = { workspace = true }
+craft-tiff = { workspace = true }
 lightz-meta = { workspace = true }
 lightz-raster = { workspace = true }
 lightz-color = { workspace = true }
 lightz-geom = { workspace = true }
 serde = { workspace = true }
+chrono = { workspace = true }
+craft-crw = { workspace = true }
 thiserror = { workspace = true }
 rayon = { workspace = true }
 miniz_oxide = { workspace = true }
