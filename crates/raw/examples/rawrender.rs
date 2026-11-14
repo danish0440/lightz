@@ -2,9 +2,9 @@
 //!
 //! Quick visual check: develop → as-shot WB + camera matrix → sRGB, oriented, box-downscaled, 8-bit TIFF.
 
+use craft_tiff::{IfdBuilder, ImageData, TiffWriter, Value, tags};
 use lightz_color::{REC2020, SRGB, transfer::encode_srgb8};
 use lightz_raw::{Method, color, decode};
-use lightz_tiff::{IfdBuilder, ImageData, TiffWriter, Value, tags};
 
 fn main() {
     let a: Vec<String> = std::env::args().skip(1).collect();
