@@ -130,7 +130,7 @@ new empty library first: hold ⌥ while opening Photos ▸ Create New).
 2. Open it from the Finder, or with `open target/macos-package/LightZ.app --args --demo` (not by running
    the binary in a terminal, which makes the terminal the app macOS asks about).
 3. Select three photos, choose File ▸ Export…, set a folder (e.g. `~/Pictures/LightZ Exports`), tick **Add
-   to Apple Photos**, type the album `LightZ test "1"` and press OK.
+   to Apple Photos**, type the album `LightZ test "1"` and press Export.
 4. macOS asks whether **LightZ** may control Photos, showing the usage text from `Info.plist`: allow it.
    Expected: the toast reads "Exported 3 of 3 photos · 3 added to Apple Photos album “LightZ test "1"”",
    and a top-level album of that name holds the three images.
