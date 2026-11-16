@@ -1,0 +1,35 @@
+{
+  "id": "lightz",
+  "name": "LightZ",
+  "upgradeCode": "229BB552-5EFD-479A-BA86-8CB6D926390C",
+  "sources": [
+    "lightz.wxs"
+  ],
+  "icon": "assets/app-icon/lightz.ico",
+  "localization": [],
+  "extensions": [
+    "UI",
+    "Util"
+  ],
+  "payloads": [
+    "FONT-LICENCES.txt",
+    "NOTICE",
+    "lightz-cli.exe",
+    "lightz.exe"
+  ],
+  "registry": [
+    [
+      "-1",
+      "Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\lightz.exe",
+      "",
+      "[#LightzExe]"
+    ],
+    [
+      "-1",
+      "Software\\LightZ",
+      "InstallFolder",
+      "[INSTALLFOLDER]"
+    ]
+  ],
+  "mode": "dualScope"
+}

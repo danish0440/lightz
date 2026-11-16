@@ -13,13 +13,13 @@
 use lightz_color::{D50, D65, PROPHOTO, REC2020, bradford};
 use lightz_geom::Point;
 use lightz_raster::Rgb32f;
-use lightz_raw::gaintable::{GainTableMap, SourcePlacement};
+use lightz_raw::gaintable::{GainTableMap, GainTableMapApply, SourcePlacement};
 
 use crate::{Plan, SourceInfo};
 use lightz_develop::DevelopSettings;
 
 /// A raw's gain table map and where its developed source sits in the active area.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LocalTone {
     pub map: GainTableMap,
     pub placement: SourcePlacement,
