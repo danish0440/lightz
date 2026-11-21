@@ -21,6 +21,18 @@ Open an issue in the [issue tracker](https://github.com/danish0440/lightz/issues
 
 LightZ writes its log to `logs/lightz.log` in its settings folder. On Windows that is `%APPDATA%\LightZ\logs\`. Each start moves the previous log to `lightz.1.log`, and that one to `lightz.2.log`, so the log of a run that crashed survives the next start.
 
+## A more detailed log
+
+When thumbnails or previews don't appear, appear slowly, or keep the computer busy, a log of every picture LightZ draws helps. Start LightZ with the environment variable `RUST_LOG` set to `warn,lightz*=info,lightz_ui_egui::render=debug`. On Windows, in PowerShell:
+
+```powershell
+$env:RUST_LOG = "warn,lightz*=info,lightz_ui_egui::render=debug"; & "C:\Program Files\LightZ\lightz.exe"
+```
+
+The log then has a line for each picture LightZ asks for, with its file, and usually a line for how it ended: drawn, or dropped and why (for example, scrolled out of view, or replaced by a newer request). A few requests that are dropped while they wait, such as when photos are removed or LightZ quits, have no ending line. A file that can't be read is still a warning. So the log shows whether a file was asked for once or many times. `LIGHTZ_LOG=debug` instead turns on the detailed log of all of LightZ.
+
+This log names the files LightZ draws, with their folders. Look through it before you share it, and remove any names you'd rather keep private.
+
 ## Still stuck?
 
 Ask in [Discord](https://github.com/danish0440/lightz/issues).
