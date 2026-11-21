@@ -9,6 +9,8 @@ description = "LightZ develop pipeline: scene-referred, float, resolution indepe
 workspace = true
 
 [dependencies]
+craft-cms-profile = { workspace = true }
+craft-develop = { workspace = true }
 lightz-geom = { workspace = true }
 lightz-color = { workspace = true }
 lightz-raster = { workspace = true }
@@ -19,7 +21,8 @@ rayon = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
+dhat = { workspace = true }
 lightz-scenes = { workspace = true }
 proptest = { workspace = true }
-image = { workspace = true }
+craft-image-codecs = { workspace = true }
 serde_json = { workspace = true }
