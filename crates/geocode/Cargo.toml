@@ -9,5 +9,5 @@ description = "LightZ offline reverse geocoding: GPS position to sublocation / c
 workspace = true
 
 [dependencies]
-miniz_oxide = { workspace = true }
+craft-zip = { workspace = true }
 serde = { workspace = true }
