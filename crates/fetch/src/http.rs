@@ -59,98 +59,30 @@ pub struct Url {
 }
 
 impl Url {
-    pub fn parse(s: &str) -> Result<Url, HttpError> {
-        let bad = |why: &str| HttpError::BadUrl(why.to_string());
-        if s.len() > 16 * 1024 {
-            return Err(bad("URL exceeds 16 KiB"));
-        }
-        let s = s.trim();
-        if s.chars().any(|c| c.is_control() || c == ' ') {
-            return Err(bad("contains spaces or control characters"));
-        }
-        let (tls, rest) = if let Some(r) = s.strip_prefix("https://") {
-            (true, r)
-        } else if let Some(r) = s.strip_prefix("http://") {
-            (false, r)
-        } else {
-            return Err(bad("only http:// and https:// are supported"));
-        };
-        let rest = rest.split('#').next().unwrap_or_default();
-        let (authority, path) = match rest.find(['/', '?']) {
-            Some(i) => (rest.get(..i).unwrap_or_default(), rest.get(i..).unwrap_or_default()),
-            None => (rest, ""),
-        };
-        let path = if path.starts_with('/') { path.to_string() } else { format!("/{path}") };
-        if authority.contains('@') {
-            return Err(bad("user names and passwords in URLs are not supported"));
-        }
-        let (host, port) = if let Some(v6) = authority.strip_prefix('[') {
-            let end = v6.find(']').ok_or_else(|| bad("unterminated IPv6 address"))?;
-            let host = v6.get(..end).unwrap_or_default();
-            let after = v6.get(end + 1..).unwrap_or_default();
-            if !after.is_empty() && !after.starts_with(':') {
-                return Err(bad("unexpected text after IPv6 address"));
-            }
-            (host.to_string(), after.strip_prefix(':'))
-        } else {
-            match authority.rsplit_once(':') {
-                Some((h, p)) => (h.to_string(), Some(p)),
-                None => (authority.to_string(), None),
-            }
-        };
-        let port = match port {
-            Some(p) => p.parse::<u16>().ok().filter(|p| *p != 0).ok_or_else(|| bad("bad port"))?,
-            None if tls => 443,
-            None => 80,
-        };
-        if host.is_empty() || !host.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | ':' | '_')) {
-            return Err(bad("bad host name"));
-        }
-        Ok(Url { tls, host: host.to_ascii_lowercase(), port, path })
+    fn shared(&self) -> craft_http_url::Url {
+        craft_http_url::Url { tls: self.tls, host: self.host.clone(), port: self.port, path: self.path.clone() }
     }
 
-    /// `Location` of a redirect, resolved against this URL.
-    pub fn join(&self, location: &str) -> Result<Url, HttpError> {
-        let l = location.trim();
-        if l.starts_with("http://") || l.starts_with("https://") {
-            let url = Url::parse(l)?;
-            if self.tls && !url.tls {
-                return Err(HttpError::BadUrl("redirect from https to http refused".into()));
-            }
-            return Ok(url);
-        }
-        // another scheme (`ftp:`, `file:`, `data:`…)
-        if let Some((scheme, _)) = l.split_once(':')
-            && !scheme.is_empty()
-            && scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
-        {
-            return Err(HttpError::BadUrl(format!("redirect to an unsupported location `{scheme}:`")));
-        }
-        let scheme = if self.tls { "https" } else { "http" };
-        let host = if self.host.contains(':') { format!("[{}]", self.host) } else { self.host.clone() };
-        let base = format!("{scheme}://{host}:{}", self.port);
-        if let Some(rest) = l.strip_prefix("//") {
-            return Url::parse(&format!("{scheme}://{rest}"));
-        }
-        if l.starts_with('/') {
-            return Url::parse(&format!("{base}{l}"));
-        }
-        // relative to the current directory
-        let dir = self.path.split('?').next().unwrap_or("/");
-        let dir = dir.rsplit_once('/').map_or("", |(d, _)| d);
-        Url::parse(&format!("{base}{dir}/{l}"))
+    fn from_shared(url: craft_http_url::Url) -> Self {
+        Self { tls: url.tls, host: url.host, port: url.port, path: url.path }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, HttpError> {
+        craft_http_url::Url::parse(s).map(Self::from_shared).map_err(|e| HttpError::BadUrl(e.0))
+    }
+
+    /// Resolve a redirect without weakening HTTPS or changing app-owned credential policy.
+    pub fn join(&self, location: &str) -> Result<Self, HttpError> {
+        self.shared().join(location).map(Self::from_shared).map_err(|e| HttpError::BadUrl(e.0))
     }
 
     fn host_header(&self) -> String {
-        let host = if self.host.contains(':') { format!("[{}]", self.host) } else { self.host.clone() };
-        let default = if self.tls { 443 } else { 80 };
-        if self.port == default { host } else { format!("{host}:{}", self.port) }
+        self.shared().host_header()
     }
 
-    /// The URL without its query (for messages: a query may hold a signed token).
+    /// The URL without its query (which may contain a signed token).
     pub fn display(&self) -> String {
-        let scheme = if self.tls { "https" } else { "http" };
-        format!("{scheme}://{}{}", self.host_header(), self.path.split('?').next().unwrap_or("/"))
+        self.shared().display()
     }
 }
 
@@ -473,7 +405,8 @@ impl Response {
                 if *left == 0 {
                     let line = self.conn.line(1024, limits)?;
                     let hex = line.split(';').next().unwrap_or_default().trim();
-                    let size = u64::from_str_radix(hex, 16).map_err(|_| HttpError::Protocol(format!("bad chunk size `{hex}`")))?;
+                    let size = if hex.bytes().all(|b| b.is_ascii_hexdigit()) { u64::from_str_radix(hex, 16).ok() } else { None }
+                        .ok_or_else(|| HttpError::Protocol(format!("bad chunk size `{hex}`")))?;
                     if size == 0 {
                         // trailers, up to the empty line
                         let mut n = 0;
@@ -549,7 +482,10 @@ pub fn get(url: &Url, headers: &[(&str, String)], limits: &Limits) -> Result<Res
     } else if find("transfer-encoding").is_some_and(|v| v.to_ascii_lowercase().contains("chunked")) {
         BodyMode::Chunked { left: 0, done: false }
     } else if let Some(n) = find("content-length") {
-        BodyMode::Length(n.trim().parse::<u64>().map_err(|_| HttpError::Protocol(format!("bad Content-Length `{n}`")))?)
+        // RFC 9110: `1*DIGIT`; `u64::from_str` alone would also take a leading '+'
+        let v = n.trim();
+        let len = if !v.is_empty() && v.bytes().all(|b| b.is_ascii_digit()) { v.parse::<u64>().ok() } else { None };
+        BodyMode::Length(len.ok_or_else(|| HttpError::Protocol(format!("bad Content-Length `{n}`")))?)
     } else {
         BodyMode::Close
     };
@@ -606,6 +542,29 @@ mod tests_connect {
         assert!(r.is_err());
         assert!(t.elapsed() < Duration::from_millis(1500), "{:?}", t.elapsed());
     }
+
+    /// Content-Length is `1*DIGIT`: a sign, hex prefix, trailing junk or empty value is refused, not read as a length.
+    #[test]
+    fn signed_or_malformed_content_length_is_refused() {
+        for value in ["+3", "-3", "3x", "", "0x10", "+0"] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let server = std::thread::spawn(move || {
+                let (mut s, _) = listener.accept().unwrap();
+                let mut buf = [0u8; 1024];
+                let _ = s.read(&mut buf);
+                let _ = s.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {value}\r\n\r\nabc").as_bytes());
+            });
+            let cancel = AtomicBool::new(false);
+            let url = Url::parse(&format!("http://127.0.0.1:{port}/f")).unwrap();
+            match get(&url, &[], &limits(&cancel)) {
+                Err(HttpError::Protocol(m)) => assert!(m.contains("bad Content-Length"), "{value:?}: {m}"),
+                Err(e) => panic!("{value:?}: unexpected error {e:?}"),
+                Ok(r) => panic!("{value:?}: malformed Content-Length accepted (status {})", r.status),
+            }
+            server.join().unwrap();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -613,9 +572,45 @@ mod tests {
     use super::*;
 
     #[test]
+    fn fragment_only_or_empty_location_keeps_file_name_and_query() {
+        let base = Url::parse("https://a.example/x/y/file?q").unwrap();
+        for l in ["#top", "", "  "] {
+            let u = base.join(l).unwrap();
+            assert_eq!((u.tls, u.host.as_str(), u.port, u.path.as_str()), (true, "a.example", 443, "/x/y/file?q"), "{l:?}");
+        }
+    }
+
+    #[test]
     fn rejects_oversized_and_control_character_urls() {
+        let base = Url::parse("https://example.com/path").unwrap();
+        assert!(base.join(&format!("#{}", "x".repeat(16 * 1024))).is_err());
         assert!(Url::parse(&format!("https://example.com/{}", "x".repeat(16 * 1024))).is_err());
         assert!(Url::parse("https://example.com/x?secret=abc\r\nInjected: 1").is_err());
+    }
+
+    #[test]
+    fn join_query_only_keeps_file_name() {
+        let u = Url::parse("https://a.example/x/y/file?q=1").unwrap();
+        assert_eq!(u.join("?page=2").unwrap().path, "/x/y/file?page=2");
+    }
+
+    #[test]
+    fn join_removes_dot_segments() {
+        let base = Url::parse("https://a.example/x/y/file").unwrap();
+        for (loc, want) in
+            [("../z", "/x/z"), ("./z", "/x/y/z"), ("../../../z", "/z"), ("/a/./b/../c", "/a/c"), ("../z?q=1", "/x/z?q=1"), ("..", "/x/")]
+        {
+            assert_eq!(base.join(loc).unwrap().path, want, "{loc}");
+        }
+    }
+
+    #[test]
+    fn url_scheme_is_matched_case_insensitively() {
+        let u = Url::parse("HTTPS://A.example/z").unwrap();
+        assert_eq!((u.tls, u.host.as_str(), u.port, u.path.as_str()), (true, "a.example", 443, "/z"));
+        assert!(Url::parse("Http://a.example/").is_ok());
+        let j = Url::parse("https://a.example/start").unwrap().join("HTTPS://cdn.example/file").unwrap();
+        assert_eq!((j.tls, j.host.as_str(), j.path.as_str()), (true, "cdn.example", "/file"));
     }
 
     #[test]
@@ -631,6 +626,15 @@ mod tests {
         {
             assert!(Url::parse(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn rejects_signed_ports() {
+        for bad in ["http://example.com:+80/x", "http://example.com:-80/x", "http://[::1]:+80/x"] {
+            assert!(Url::parse(bad).is_err(), "{bad}");
+        }
+        assert!(Url::parse("http://a.test/").unwrap().join("http://example.com:+80/x").is_err());
+        assert_eq!(Url::parse("http://example.com:80/x").unwrap().port, 80);
     }
 
     #[test]
