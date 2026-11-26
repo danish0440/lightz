@@ -1,5 +1,13 @@
+ci-windows.yml
+ci.yml
 freebsd.yml
+house-rules.yml
+nightly-dispatch.yml
+nightly-macos.yml
+nightly-sign.yml
+nightly.yml
 nix.yml
 packaging-lint.yml
 release.yml
+sonarcloud.yml
 windows-arm64.yml

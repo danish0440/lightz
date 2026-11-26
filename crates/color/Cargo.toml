@@ -9,6 +9,7 @@ description = "LightZ color (L0)"
 workspace = true
 
 [dependencies]
+craft-color-transform = { workspace = true }
 serde = { workspace = true }
 lightz-geom = { workspace = true }
 
