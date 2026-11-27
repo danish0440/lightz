@@ -1,12 +1,21 @@
 //! Masking and Remove (spot) commands on the active photo.
 
-use lightz_develop::{BrushStroke, LocalAdjustments, Mask, MaskComponent, MaskOp, MaskShape, RedEye, Spot, SpotMode};
+use lightz_develop::{
+    BrushStroke, LocalAdjustments, MAX_COLOR_RANGE_SAMPLES, MAX_RED_EYES, Mask, MaskComponent, MaskOp, MaskShape, RedEye, Spot, SpotMode,
+};
 use lightz_geom::Point;
 use serde_json::{Value, json};
 
 use super::{CommandSpec, bad, bool_or, cmd, f64_or, has_active, ok, point, str_param};
 use crate::segment::{Click, MAX_CLICKS};
 use crate::{Result, Session};
+
+/// Caps a colour-range shape's sample list at [`MAX_COLOR_RANGE_SAMPLES`] (render cost is pixels x samples).
+fn cap_color_range_samples(shape: &mut MaskShape) {
+    if let MaskShape::ColorRange { samples, .. } = shape {
+        samples.truncate(MAX_COLOR_RANGE_SAMPLES);
+    }
+}
 
 fn shape_from(kind: &str, p: &Value, c: &str) -> Result<MaskShape> {
     Ok(match kind {
@@ -35,7 +44,12 @@ fn shape_from(kind: &str, p: &Value, c: &str) -> Result<MaskShape> {
             let samples: Vec<[f64; 3]> = p
                 .get("samples")
                 .and_then(Value::as_array)
-                .map(|a| a.iter().filter_map(|s| Some([s.get(0)?.as_f64()?, s.get(1)?.as_f64()?, s.get(2)?.as_f64()?])).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|s| Some([s.get(0)?.as_f64()?, s.get(1)?.as_f64()?, s.get(2)?.as_f64()?]))
+                        .take(MAX_COLOR_RANGE_SAMPLES)
+                        .collect()
+                })
                 .unwrap_or_default();
             MaskShape::ColorRange { samples, refine: f64_or(p, "refine", 50.0) }
         }
@@ -84,6 +98,10 @@ fn resolve_ai(s: &mut Session, shape: &mut MaskShape, c: &str) -> Result<Later> 
     match shape {
         MaskShape::Object { seg: Some(_), .. } | MaskShape::Prompt { seg: Some(_), .. } => {}
         MaskShape::Object { hint, exclude, .. } if !hint.is_empty() && background => {
+            // refused here, not when the worker later fails at the model's limit after "pending"
+            if hint.len() + exclude.len() > crate::segment::MAX_CLICKS {
+                return Err(ai_err(format!("an Object selection takes at most {} clicks", crate::segment::MAX_CLICKS)));
+            }
             s.segmenter.require_model()?;
             return Ok(Later::Clicks(std::mem::take(hint), std::mem::take(exclude)));
         }
@@ -144,7 +162,11 @@ fn masks_edit(s: &mut Session, c: &str, label: &str, f: impl FnOnce(&mut Vec<Mas
     let id = s.active().ok_or_else(|| bad(c, "no active photo"))?;
     let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
     let mut active = s.active_mask;
+    // the Lens Blur focus follows its mask: a deleted one stops being the focus, so a new mask
+    // that gets its id (the next id is the highest + 1) doesn't turn into it
+    let focus = d.lens_blur.focus_mask.filter(|f| d.masks.iter().any(|m| m.id == *f));
     f(&mut d.masks, &mut active)?;
+    d.lens_blur.focus_mask = focus.filter(|f| d.masks.iter().any(|m| m.id == *f));
     s.set_develop(id, d, label)?;
     s.active_mask = active;
     Ok(json!({"activeMask": active}))
@@ -199,8 +221,28 @@ fn connected_strokes(from: Point, last: &BrushStroke, to: BrushStroke) -> Vec<Br
     out
 }
 
-fn mask_id(p: &Value, active: Option<u32>, c: &str) -> Result<u32> {
-    p.get("id").and_then(Value::as_u64).map(|v| v as u32).or(active).ok_or_else(|| bad(c, "no mask selected (give `id`)"))
+pub(super) fn parse_mask_id(v: &Value, c: &str) -> Result<u32> {
+    v.as_u64().and_then(|v| u32::try_from(v).ok()).ok_or_else(|| bad(c, "`id` must be a non-negative integer that fits in u32"))
+}
+
+/// Omitted or null targets keep the command's default; malformed explicit targets never do.
+fn optional_mask_id(p: &Value, c: &str) -> Result<Option<u32>> {
+    p.get("id").filter(|v| !v.is_null()).map(|v| parse_mask_id(v, c)).transpose()
+}
+
+pub(super) fn mask_id(p: &Value, active: Option<u32>, c: &str) -> Result<u32> {
+    optional_mask_id(p, c)?.or(active).ok_or_else(|| bad(c, "no mask selected (give `id`)"))
+}
+
+fn optional_index(p: &Value, key: &str, c: &str) -> Result<Option<usize>> {
+    p.get(key)
+        .filter(|v| !v.is_null())
+        .map(|v| {
+            v.as_u64()
+                .and_then(|v| usize::try_from(v).ok())
+                .ok_or_else(|| bad(c, format!("`{key}` must be a non-negative integer that fits in usize")))
+        })
+        .transpose()
 }
 
 fn find(masks: &mut [Mask], id: u32, c: &str) -> Result<usize> {
@@ -282,7 +324,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Brush Stroke",
             [],
             None,
-            "{id?: maskId, points: [[x,y],…] normalized, size?: fraction of long edge (0.03), feather?, flow?, density?, erase?: bool, autoMask?: bool, pressure?: [p,…] pen pressure 0..1 per point (scales each dab's size and flow; omitted: full), connect?: bool — start from the last point of the mask's last stroke (⇧-click), size / feather / flow tapering from that stroke's to these} → {activeMask, connected}",
+            "{id?: maskId, points: [[x,y],…] normalized, size?: fraction of long edge (0.03), feather?, flow?, density?, erase?: bool, autoMask?: bool, pressure?: [p,…] pen pressure 0..1 per point (scales each dab's size and flow; omitted: full), connect?: bool — start from the last point of the mask's last stroke (⇧-click), size / feather / flow tapering from that stroke's to these, continue?: bool — the stroke being painted, sent again as it grows: it replaces the mask's last stroke, so its effect shows while painting} → {activeMask, connected}",
             has_active,
             |s, p| {
                 let pts: Vec<Point> = p
@@ -305,9 +347,10 @@ pub fn specs() -> Vec<CommandSpec> {
                     pressure: pressure_list(p.get("pressure"), pts_len)?,
                 };
                 let connect = bool_or(p, "connect", false);
+                let again = bool_or(p, "continue", false);
                 let mut connected = false;
                 let next = s.active().and_then(|id| s.develop_of(id)).map(|d| d.next_mask_id()).unwrap_or(1);
-                let want = p.get("id").and_then(Value::as_u64).map(|v| v as u32).or(s.active_mask);
+                let want = optional_mask_id(p, "mask.brushStroke")?.or(s.active_mask);
                 let adjust = super::mask_effects::new_mask_adjust(s, "brush");
                 let mut out = masks_edit(s, "mask.brushStroke", "Brush", |masks, active| {
                     let i = match want.and_then(|m| masks.iter().position(|x| x.id == m)) {
@@ -342,7 +385,11 @@ pub fn specs() -> Vec<CommandSpec> {
                                 strokes.extend(connected_strokes(from, &last, stroke));
                                 connected = true;
                             }
-                            None => strokes.push(stroke),
+                            // the stroke being painted, sent again as it grew: it replaces itself
+                            None => match strokes.last_mut() {
+                                Some(last) if again => *last = stroke,
+                                _ => strokes.push(stroke),
+                            },
                         }
                     } else {
                         m.components.push(MaskComponent {
@@ -361,9 +408,10 @@ pub fn specs() -> Vec<CommandSpec> {
             }
         ),
         cmd!("mask.update", "Update Mask Shape", [], None, "{id?, component?: index (0), shape: MaskShape JSON}", has_active, |s, p| {
-            let shape: MaskShape =
+            let mut shape: MaskShape =
                 serde_json::from_value(p.get("shape").cloned().unwrap_or_default()).map_err(|e| bad("mask.update", e.to_string()))?;
-            let comp = p.get("component").and_then(Value::as_u64).unwrap_or(0) as usize;
+            cap_color_range_samples(&mut shape);
+            let comp = optional_index(p, "component", "mask.update")?.unwrap_or(0);
             let mid = mask_id(p, s.active_mask, "mask.update")?;
             masks_edit(s, "mask.update", "Edit Mask", |masks, _| {
                 let i = find(masks, mid, "mask.update")?;
@@ -381,6 +429,8 @@ pub fn specs() -> Vec<CommandSpec> {
             has_active,
             |s, p| {
                 let c = "mask.sampleColor";
+                let mid = mask_id(p, s.active_mask, c)?;
+                let comp = optional_index(p, "component", c)?;
                 let (x, y) = (super::f64_req(p, "x", c)?, super::f64_req(p, "y", c)?);
                 let add = p.get("add").and_then(Value::as_bool).unwrap_or(false);
                 let id = s.active().ok_or_else(|| bad(c, "no active photo"))?;
@@ -390,8 +440,6 @@ pub fn specs() -> Vec<CommandSpec> {
                 let req = lightz_pipeline::RenderRequest::fit(384, 384);
                 let lab = lightz_pipeline::color_range_sample(&src, &info, &d, &req, lightz_geom::Point::new(x, y))
                     .ok_or_else(|| bad(c, "the point is outside the photo"))?;
-                let mid = mask_id(p, s.active_mask, c)?;
-                let comp = p.get("component").and_then(Value::as_u64).map(|v| v as usize);
                 let mut out = Vec::new();
                 masks_edit(s, c, "Color Range", |masks, _| {
                     let i = find(masks, mid, c)?;
@@ -429,6 +477,31 @@ pub fn specs() -> Vec<CommandSpec> {
                 let exclude = bool_or(p, "exclude", false);
                 let id = s.active().ok_or_else(|| bad(c, "no active photo"))?;
                 let mid = mask_id(p, s.active_mask, c)?;
+                // an old mask (on the corrected frame, as the click then is) goes onto the photo
+                // first, and the click with it: the model works on the photo before lens
+                // corrections, Upright and Transform, and reads every click there
+                let mut at = at;
+                if let Some(cur) = s.develop_of(id).filter(|d| d.masks.iter().any(|m| m.id == mid && !m.on_photo)) {
+                    if let Some(f) = s.mask_frame(id, &cur) {
+                        // a click on the corrected frame's blank space is off the photo, not on
+                        // its edge (a hair past it, from rounding, is on the edge)
+                        const EDGE: f64 = 1e-6;
+                        let n = f.for_mask(true).norm_to_mask(at);
+                        let on = |v: f64| v.is_finite() && (-EDGE..=1.0 + EDGE).contains(&v);
+                        if !(on(n.x) && on(n.y)) {
+                            return Err(bad(c, "the point is outside the photo"));
+                        }
+                        at = Point::new(n.x.clamp(0.0, 1.0), n.y.clamp(0.0, 1.0));
+                    }
+                    let mut on = (*cur).clone();
+                    s.attach_masks(id, &cur, &mut on);
+                    s.apply_silent(lightz_catalog::Op::SetDevelop {
+                        id,
+                        settings: std::sync::Arc::new(on),
+                        label: "Masks".into(),
+                        edited: None,
+                    })?;
+                }
                 let d = s.develop_of(id).unwrap_or_default();
                 let m = d.masks.iter().find(|m| m.id == mid).ok_or_else(|| bad(c, format!("no mask {mid}")))?;
                 let k = m
@@ -482,8 +555,8 @@ pub fn specs() -> Vec<CommandSpec> {
                 let mid = mask_id(p, s.active_mask, c)?;
                 let d = s.develop_of(id).unwrap_or_default();
                 let m = d.masks.iter().find(|m| m.id == mid).ok_or_else(|| bad(c, format!("no mask {mid}")))?;
-                let k = match p.get("component").and_then(Value::as_u64) {
-                    Some(k) => k as usize,
+                let k = match optional_index(p, "component", c)? {
+                    Some(k) => k,
                     None => m
                         .components
                         .iter()
@@ -513,7 +586,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "AI Mask Model Status",
             [],
             None,
-            "{} — whether this build has AI masks, whether the SAM 3 model is installed (and where), loaded, busy, and the download's progress → {available, installed, dir, loaded, busy, analyzing, sizeBytes, license, licenseUrl, mirrors, download: {running, done, total, file, error, finished}}",
+            "{} — whether this build has AI masks, whether the SAM 3 model is installed (and where), loaded, busy, where it runs and how long the last photo took, and the download's progress → {available, installed, dir, loaded, busy, analyzing, runOn (auto | cpu: segment.settings), backend: {device (what runs the backbone: a GPU's name, Metal GPU or CPU; null until loaded), runtime (wgpu|candle), heads (CPU|Metal GPU, and which of the parts after the backbone the GPU accelerator runs, e.g. `CPU; the necks on the GPU`), fallback (why the backbone is not on the GPU), encodeMs (last backbone run), analyzeMs (last photo's analysis before the first click)}, sizeBytes, license, licenseUrl, mirrors, download: {running, done, total, file, error, finished}}",
             super::always,
             |s, _| {
                 let g = &s.segmenter;
@@ -525,12 +598,30 @@ pub fn specs() -> Vec<CommandSpec> {
                     "loaded": g.loaded(),
                     "busy": g.busy(),
                     "analyzing": g.analyzing(),
+                    "runOn": g.run_on().name(),
+                    "backend": g.backend(),
                     "sizeBytes": crate::segment::MODEL_BYTES,
                     "license": crate::segment::LICENSE_NAME,
                     "licenseUrl": crate::segment::LICENSE_URL,
                     "mirrors": g.mirrors().len(),
                     "download": g.download_status(),
                 }))
+            }
+        ),
+        cmd!(
+            query "segment.settings",
+            "AI Mask Settings",
+            [],
+            None,
+            "{runOn?: auto | cpu} → {runOn} — where SAM 3 runs (Settings ▸ Performance ▸ AI masks): `auto` (the default) the GPU when there is one (Metal on macOS; elsewhere the parts LightZ's wgpu kernels run, while GPU rendering is allowed, and the rest on the CPU: `segment.model.status` → `backend` says which), `cpu` all of it on the CPU on every platform (for a GPU that can't run it). Local inference only: a remote worker (`LIGHTZ_SAM3_REMOTE`) runs on its Mac's Metal device either way. Kept with the app's settings; a loaded model moves at its next request",
+            super::always,
+            |s, p| {
+                let c = "segment.settings";
+                if let Some(v) = p.get("runOn") {
+                    let run_on = v.as_str().and_then(crate::segment::RunOn::parse).ok_or_else(|| bad(c, "`runOn` must be auto or cpu"))?;
+                    s.segmenter.set_run_on(run_on).map_err(ai_err)?;
+                }
+                Ok(json!({"runOn": s.segmenter.run_on().name()}))
             }
         ),
         cmd!(
@@ -588,7 +679,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Set Mask Adjustments",
             [],
             None,
-            "{id?, values: {exposure, contrast, highlights, shadows, whites, blacks, temp, tint, texture, clarity, dehaze, hue, saturation, sharpness, noise, moire, defringe, color_hue, color_sat, amount}}",
+            "{id?, values: {exposure, contrast, highlights, shadows, whites, blacks, temp, tint, texture, clarity, dehaze, hue, saturation, sharpness, noise, moire, defringe, lens_blur, lens_blur_off, lens_blur_outside, lens_blur_boost, lens_blur_transition, color_hue, color_sat, amount}}",
             has_active,
             |s, p| {
                 let vals = p.get("values").cloned().ok_or_else(|| bad("mask.adjust", "missing values"))?;
@@ -604,7 +695,7 @@ pub fn specs() -> Vec<CommandSpec> {
             }
         ),
         cmd!("mask.select", "Select Mask", [], None, "{id|null}", has_active, |s, p| {
-            s.active_mask = p.get("id").and_then(Value::as_u64).map(|v| v as u32);
+            s.active_mask = optional_mask_id(p, "mask.select")?;
             ok()
         }),
         cmd!("mask.delete", "Delete Mask", [], None, "{id?}", has_active, |s, p| {
@@ -684,7 +775,7 @@ pub fn specs() -> Vec<CommandSpec> {
             |s, p| {
                 let c = "mask.component";
                 let mid = mask_id(p, s.active_mask, c)?;
-                let k = p.get("component").and_then(Value::as_u64).ok_or_else(|| bad(c, "missing component"))? as usize;
+                let k = optional_index(p, "component", c)?.ok_or_else(|| bad(c, "missing component"))?;
                 let action = str_param(p, "action").ok_or_else(|| bad(c, "missing action"))?.to_string();
                 let op: Option<MaskOp> = match p.get("op") {
                     Some(v) => Some(serde_json::from_value(v.clone()).map_err(|e| bad(c, e.to_string()))?),
@@ -856,15 +947,16 @@ pub fn specs() -> Vec<CommandSpec> {
                     return Err(bad("spot.add", "missing points"));
                 }
                 let d = Spot::default();
+                let size = f64_or(p, "size", d.size).clamp(SPOT_SIZE.0, SPOT_SIZE.1);
+                let id = s.active().ok_or_else(|| bad("spot.add", "no active photo"))?;
                 let mut spot = Spot {
                     mode,
-                    points: pts,
-                    size: f64_or(p, "size", d.size).clamp(SPOT_SIZE.0, SPOT_SIZE.1),
+                    points: thin_spot_points(&pts, size, super::develop::crop_dims(s, id)),
+                    size,
                     feather: f64_or(p, "feather", d.feather).clamp(0.0, 100.0),
                     opacity: f64_or(p, "opacity", d.opacity).clamp(0.0, 100.0),
                     source_offset: point(p, "source"),
                 };
-                let id = s.active().ok_or_else(|| bad("spot.add", "no active photo"))?;
                 let mut dd = (*s.develop_of(id).unwrap_or_default()).clone();
                 if spot.source_offset.is_none() && spot.mode != SpotMode::Fill {
                     // resolve the automatic source now: it gets a pin and stays put at every size
@@ -879,8 +971,8 @@ pub fn specs() -> Vec<CommandSpec> {
         ),
         cmd!("spot.select", "Select Spot", [], None, "{index|null}", has_active, |s, p| {
             let n = spots_len(s);
-            s.active_spot = match p.get("index").and_then(Value::as_u64) {
-                Some(i) if (i as usize) < n => Some(i as usize),
+            s.active_spot = match optional_index(p, "index", "spot.select")? {
+                Some(i) if i < n => Some(i),
                 Some(_) => return Err(bad("spot.select", "no such spot")),
                 None => None,
             };
@@ -987,6 +1079,9 @@ pub fn specs() -> Vec<CommandSpec> {
                     catchlight: None,
                 };
                 let id = s.active().ok_or_else(|| bad(c, "no active photo"))?;
+                if s.develop_of(id).is_some_and(|d| d.red_eye.len() >= MAX_RED_EYES) {
+                    return Err(bad(c, format!("at most {MAX_RED_EYES} red eye corrections")));
+                }
                 let mut dd = (*s.develop_of(id).unwrap_or_default()).clone();
                 dd.red_eye.push(eye);
                 let n = dd.red_eye.len();
@@ -1040,7 +1135,7 @@ fn spots_len(s: &Session) -> usize {
 
 /// `index` from the params, else the selected spot.
 fn spot_index(s: &Session, p: &Value, c: &str) -> Result<usize> {
-    let i = p.get("index").and_then(Value::as_u64).map(|v| v as usize).or(s.active_spot).ok_or_else(|| bad(c, "no spot selected (give `index`)"))?;
+    let i = optional_index(p, "index", c)?.or(s.active_spot).ok_or_else(|| bad(c, "no spot selected (give `index`)"))?;
     if i >= spots_len(s) {
         return Err(bad(c, "no such spot"));
     }
@@ -1052,6 +1147,38 @@ fn spots_edit(s: &mut Session, c: &str, label: &str, f: impl FnOnce(&mut Vec<Spo
     let mut d = (*s.develop_of(id).unwrap_or_default()).clone();
     f(&mut d.spots)?;
     s.set_develop(id, d, label)
+}
+
+/// A brushed spot's points as stored: consecutive near-duplicates dropped and the stroke thinned to one point
+/// every `size / 4` (long-edge units, like the mask brush's dabs), the first and the last point kept. `dims` is
+/// the oriented photo's width and height: points are normalized per axis, so a distance counts in long-edge
+/// units (issue #2359). A caller that records a point per frame (the app's brush, an agent replaying a pointer)
+/// then stores a handful of points instead of dozens that all draw and render the same disc.
+fn thin_spot_points(pts: &[Point], size: f64, (w, h): (f64, f64)) -> Vec<Point> {
+    let long = w.max(h).max(1e-9);
+    let (kx, ky) = (w / long, h / long);
+    let dist = |a: Point, b: Point| ((b.x - a.x) * kx).hypot((b.y - a.y) * ky);
+    let spacing = size / 4.0;
+    let mut out: Vec<Point> = Vec::with_capacity(pts.len().min(64));
+    for &q in pts {
+        // `> 0.0` as well: with a zero size an exact repeat would otherwise count as a step
+        if out.last().is_none_or(|&last| dist(last, q) > 0.0 && dist(last, q) >= spacing) {
+            out.push(q);
+        }
+    }
+    // the stroke reaches where it ended: a last point closer than the spacing takes the place of the one
+    // before it (so a hold at the end doesn't leave a bump), unless it is at that one already
+    if let Some(&end) = pts.last()
+        && let Some(&last) = out.last()
+        && dist(last, end) > 0.0
+    {
+        match out.len() {
+            1 if dist(last, end) < spacing / 2.0 => {}
+            1 => out.push(end),
+            n => out[n - 1] = end,
+        }
+    }
+    out
 }
 
 /// An automatic source for `spot` on photo `id` (a small proxy of the photo, framed by `d`).
@@ -1084,6 +1211,9 @@ pub(crate) fn clamp_local(mut a: LocalAdjustments) -> LocalAdjustments {
     ] {
         c(v, -100.0, 100.0);
     }
+    c(&mut a.lens_blur, 0.0, 100.0);
+    c(&mut a.lens_blur_boost, 0.0, 100.0);
+    c(&mut a.lens_blur_transition, 0.0, 100.0);
     c(&mut a.color_hue, 0.0, 360.0);
     c(&mut a.color_sat, 0.0, 100.0);
     c(&mut a.amount, 0.0, 200.0);
@@ -1092,7 +1222,7 @@ pub(crate) fn clamp_local(mut a: LocalAdjustments) -> LocalAdjustments {
 
 /// `mask.brushStroke`'s `pressure`: one number 0..1 per point (clamped), at most one per point; absent or `null`
 /// is no pressure data.
-fn pressure_list(v: Option<&Value>, points: usize) -> Result<Vec<f32>> {
+pub(super) fn pressure_list(v: Option<&Value>, points: usize) -> Result<Vec<f32>> {
     let Some(v) = v.filter(|v| !v.is_null()) else { return Ok(Vec::new()) };
     let list = v.as_array().ok_or_else(|| bad("mask.brushStroke", "pressure must be a list of numbers 0..1"))?;
     if list.len() > points {
@@ -1102,4 +1232,96 @@ fn pressure_list(v: Option<&Value>, points: usize) -> Result<Vec<f32>> {
         .map(|q| q.as_f64().filter(|f| f.is_finite()).map(|f| f.clamp(0.0, 1.0) as f32))
         .collect::<Option<Vec<f32>>>()
         .ok_or_else(|| bad("mask.brushStroke", "pressure must be a list of numbers 0..1"))
+}
+
+#[cfg(test)]
+mod tests_color_range {
+    use super::*;
+
+    /// Automation (`mask.add`/`mask.update`) used to take any number of colour-range samples; render
+    /// cost is pixels x samples, so a few hundred hung a large render. The list is now capped.
+    #[test]
+    fn color_range_samples_are_capped() {
+        let samples: Vec<Value> = (0..1000).map(|i| json!([i as f64 / 1000.0, 0.1, 0.2])).collect();
+        let shape = shape_from("colorRange", &json!({ "samples": samples }), "mask.add").unwrap();
+        let MaskShape::ColorRange { samples, .. } = shape else { panic!("expected ColorRange") };
+        assert_eq!(samples.len(), MAX_COLOR_RANGE_SAMPLES);
+        // A reasonable request is unchanged.
+        let few = shape_from("colorRange", &json!({ "samples": [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]] }), "mask.add").unwrap();
+        let MaskShape::ColorRange { samples, .. } = few else { panic!() };
+        assert_eq!(samples.len(), 2);
+        // mask.update deserializes the shape directly; it is capped the same way.
+        let mut shape = shape_from("colorRange", &json!({ "samples": [[0.1, 0.2, 0.3]] }), "mask.add").unwrap();
+        if let MaskShape::ColorRange { samples, .. } = &mut shape {
+            samples.resize(1000, samples[0]);
+        }
+        cap_color_range_samples(&mut shape);
+        let MaskShape::ColorRange { samples, .. } = shape else { panic!() };
+        assert_eq!(samples.len(), MAX_COLOR_RANGE_SAMPLES);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The thinning measures in long-edge units: on a portrait photo the y axis is the long one (issue #2359).
+    #[test]
+    fn spot_thinning_respects_the_aspect_ratio() {
+        let pts: Vec<Point> = (0..100).map(|i| Point::new(0.1, 0.1 + 0.002 * f64::from(i))).collect();
+        // size 0.04: one point per 0.01 long-edge units, which is 0.01 of y on a portrait photo but 0.015 on a landscape one
+        let tall = thin_spot_points(&pts, 0.04, (2.0, 3.0));
+        let wide = thin_spot_points(&pts, 0.04, (3.0, 2.0));
+        assert!(tall.len() > wide.len(), "{} vs {}", tall.len(), wide.len());
+        // 0.198 of y: 19.8 spacings of 0.01 (portrait), 13.2 of 0.015 (landscape), plus the first point
+        assert!((tall.len() as f64 - 21.0).abs() <= 2.0, "{}", tall.len());
+        assert!((wide.len() as f64 - 14.0).abs() <= 2.0, "{}", wide.len());
+        assert_eq!(tall.first(), pts.first());
+        assert_eq!(tall.last(), pts.last());
+        assert_eq!(wide.last(), pts.last());
+    }
+
+    #[test]
+    fn thinning_keeps_clicks_and_degenerate_input() {
+        let one = vec![Point::new(0.5, 0.5)];
+        assert_eq!(thin_spot_points(&one, 0.05, (3.0, 2.0)), one);
+        assert_eq!(thin_spot_points(&[one[0], one[0], one[0]], 0.05, (3.0, 2.0)), one);
+        assert!(thin_spot_points(&[], 0.05, (3.0, 2.0)).is_empty());
+        // a zero-sized photo doesn't divide by zero
+        assert_eq!(thin_spot_points(&[one[0], Point::new(0.6, 0.6)], 0.05, (0.0, 0.0)).len(), 1);
+    }
+
+    /// A long straight stroke keeps about one point per spacing, leaves no gap wider than a spacing plus one
+    /// recorded step (two spacings at the end), and still ends where the stroke ended, also after a hold there.
+    #[test]
+    fn a_long_stroke_is_thinned_without_gaps() {
+        let step = 0.0008;
+        let mut pts: Vec<Point> = (0..=1000).map(|i| Point::new(0.1 + step * f64::from(i), 0.5)).collect();
+        // the pointer rests at the end for a few frames
+        pts.extend([*pts.last().unwrap(); 5]);
+        let (size, dims) = (0.04, (3.0, 2.0));
+        let thin = thin_spot_points(&pts, size, dims);
+        // 0.8 long-edge units at one point per 0.01, plus the first
+        assert!((70..=82).contains(&thin.len()), "{}", thin.len());
+        assert_eq!(thin.first(), pts.first());
+        assert_eq!(thin.last(), pts.last());
+        let gaps: Vec<f64> = thin.windows(2).map(|w| w[1].x - w[0].x).collect();
+        let spacing = size / 4.0;
+        for &gap in &gaps[..gaps.len() - 1] {
+            assert!(gap > 0.0 && gap <= spacing + step + 1e-12, "gap {gap}");
+        }
+        // the end takes the place of the last point kept, so the last gap may reach two spacings
+        let end_gap = gaps[gaps.len() - 1];
+        assert!(end_gap > 0.0 && end_gap < 2.0 * spacing + step, "end gap {end_gap}");
+    }
+
+    /// A zero or tiny brush thins nothing but exact repeats: every distinct point is kept, in order.
+    #[test]
+    fn a_zero_or_tiny_size_keeps_every_distinct_point() {
+        let pts: Vec<Point> = (0..50).map(|i| Point::new(0.2 + 0.001 * f64::from(i), 0.3)).collect();
+        let doubled: Vec<Point> = pts.iter().flat_map(|&q| [q, q]).collect();
+        for size in [0.0, 1e-9] {
+            assert_eq!(thin_spot_points(&doubled, size, (3.0, 2.0)), pts, "size {size}");
+        }
+    }
 }

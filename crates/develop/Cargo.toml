@@ -9,6 +9,7 @@ description = "LightZ develop settings: the non-destructive edit model, control 
 workspace = true
 
 [dependencies]
+craft-mime = { workspace = true }
 lightz-geom = { workspace = true }
 lightz-color = { workspace = true }
 serde = { workspace = true }
