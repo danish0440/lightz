@@ -13,7 +13,7 @@ use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::Duration;
 
 use lightz_catalog::PhotoId;
-use lightz_faces::align::{Rgb, align_to_template, crop_box};
+use lightz_faces::align::{FaceCrop, Rgb, align_to_template, crop_box};
 use lightz_faces::runtime::Embedder;
 use lightz_faces::yunet::{Detector, Face, Options};
 use lightz_geom::Rect;
@@ -221,13 +221,11 @@ pub(crate) fn process(p: Prepared, embedder: &Embedder) -> Done {
                     Some((_, f)) => align_to_template(&img, &scaled(f), iw, ih),
                     None => crop_box(
                         &img,
-                        rect.x0 as f32 * w as f32,
-                        rect.y0 as f32 * h as f32,
-                        rect.x1 as f32 * w as f32,
-                        rect.y1 as f32 * h as f32,
-                        BOX_PAD,
-                        iw,
-                        ih,
+                        FaceCrop {
+                            bounds: (rect.x0 as f32 * w as f32, rect.y0 as f32 * h as f32, rect.x1 as f32 * w as f32, rect.y1 as f32 * h as f32),
+                            padding: BOX_PAD,
+                            output_size: (iw, ih),
+                        },
                     ),
                 };
                 // shown by the detector's box where it found this face: every face then has the same tightness
@@ -250,7 +248,7 @@ pub(crate) fn process(p: Prepared, embedder: &Embedder) -> Done {
             None
         };
         let crops: Vec<&[u8]> = faces.iter().filter_map(|(_, c, _)| c.as_deref()).collect();
-        let mut embedded = embedder.embed_batch(&crops).into_iter();
+        let mut embedded = embedder.embed_faces(&crops).into_iter();
         let results: Vec<(Rect, Option<Vec<f32>>, Rect)> =
             faces.into_iter().map(|(rect, crop, view)| (rect, crop.and_then(|_| embedded.next().and_then(Result::ok)), view)).collect();
         (results, new_faces)
