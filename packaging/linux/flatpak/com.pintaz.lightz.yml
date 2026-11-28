@@ -2,10 +2,13 @@
 #
 # Flatpak builds run offline, so the crate sources must be vendored first. From the repo root:
 #
-#   curl -fsSLO https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
-#   python3 flatpak-cargo-generator.py Cargo.lock -o packaging/linux/flatpak/cargo-sources.json
+#   ./packaging/linux/flatpak/generate-cargo-sources.py
 #   flatpak-builder --user --install --force-clean build-flatpak packaging/linux/flatpak/com.pintaz.lightz.yml
 #   flatpak run com.pintaz.lightz
+#
+# The wrapper downloads the pinned upstream flatpak-cargo-generator, verifies its checksum,
+# applies the two reviewed patches described in packaging/linux/flatpak/README.md, and writes
+# cargo-sources.json atomically. That README also covers dependencies and offline validation.
 #
 # For Flathub, replace the `dir` source with a `git` source pinned to a release tag and commit.
 #
@@ -20,22 +23,39 @@ sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
 command: lightz
 finish-args:
+  # The shared updater inspects and updates this installation via flatpak-spawn --host.
+  - --talk-name=org.freedesktop.Flatpak
+  - --filesystem=xdg-data/ArtCraft/versions:ro
   # Display: Wayland first; X11 only when no Wayland compositor is running.
   - --socket=wayland
   - --socket=fallback-x11
+  # Cursor theme: without the cursor-shape protocol (GNOME 46, for one) winit loads the pointer
+  # from an Xcursor theme itself. The sandbox sets no XCURSOR_PATH and the runtime ships no cursor
+  # themes, so once a tool hides the pointer (Crop, brushes) it never comes back. The host's themes
+  # are mounted under /run/host (#1657; the same fix as storytold/vectorcraft#2502).
+  # A host whose default theme is a symlink out of /usr/share/icons (Ubuntu's /etc/alternatives)
+  # still needs a theme named: flatpak override --user --env=XCURSOR_THEME=Adwaita com.pintaz.lightz
+  # ~/.icons stays first, as in the default search path: a theme there is found once that folder is
+  # granted (flatpak override --user --filesystem=~/.icons:ro com.pintaz.lightz). The
+  # sandbox's own folders (the app's, the runtime's, an Icontheme extension's) stay searched last.
+  - --env=XCURSOR_PATH=~/.icons:/run/host/user-share/icons:/run/host/share/icons:/app/share/icons:/usr/share/icons:/usr/share/runtime/share/icons:~/.cursors
   # X11 shared memory (MIT-SHM). Without it the X11 fallback is slow or fails.
   - --share=ipc
   # GPU access for the wgpu renderer (Vulkan, or GL as a fallback).
   - --device=dri
+  # Screen readers: AccessKit asks the accessibility bus (org.a11y.Bus) whether one is running and
+  # publishes the window there over AT-SPI. Without it the sandbox hides the bus and the app is
+  # invisible to Orca and other assistive technology.
+  - --talk-name=org.a11y.Bus
   # The library lives in ~/Pictures/LightZ Library by default, and imports usually come from
   # Pictures. Open/Save dialogs go through the file-chooser portal (rfd's xdg-portal backend) and
   # drag-and-drop through the document portal, so picked folders elsewhere work without broad
   # filesystem access.
   - --filesystem=xdg-pictures
-  # Deliberately not granted: home/host filesystem access, and network. The network is only for
-  # the optional SAM 3 model download (AI Object/Describe masks, docs/ai-masks.md); without it
-  # that download fails with an error and everything else works. Users who want it run
-  # `flatpak override --user --share=network com.pintaz.lightz`.
+  # Deliberately not granted: home/host filesystem access. Network is needed for update checks
+  # against GitHub and the optional SAM 3 model download (AI Object/Describe masks,
+  # docs/ai-masks.md).
+  - --share=network
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
 modules:
@@ -52,6 +72,9 @@ modules:
       - install -Dm644 packaging/linux/com.pintaz.lightz.desktop /app/share/applications/com.pintaz.lightz.desktop
       - install -Dm644 packaging/linux/com.pintaz.lightz.mime.xml /app/share/mime/packages/com.pintaz.lightz.xml
       - mkdir -p /app/share/icons && cp -R assets/app-icon/hicolor /app/share/icons/
+      - install -Dm644 NOTICE /app/share/doc/lightz/NOTICE
+      - install -Dm644 assets/ATTRIBUTION.md /app/share/doc/lightz/ATTRIBUTION.md
+      - install -Dm644 assets/fonts/OFL-Inter.txt /app/share/doc/lightz/OFL-Inter.txt
       - >-
         version=$(awk '/^\[/{p=($0=="[workspace.package]");next} p&&$1=="version"{gsub(/[" ]/,"",$3);print $3;exit}' Cargo.toml);
         install -d /app/share/metainfo;
